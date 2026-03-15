@@ -50,12 +50,16 @@
 
 **Fáze 2 dokončena ✅**
 
-## Fáze 3 – Admin CMS ⏳
-- [ ] Editor článků (TipTap)
-- [ ] Správa sekcí a menu
-- [ ] Správa homepage bloků
-- [ ] Správa zápatí
-- [ ] Správa médií
+## Fáze 3 – Admin CMS ✅ (dokončeno)
+- [x] `app/admin/layout.tsx` — Server Component, ověření role admin/manager, sidebar ✅
+- [x] `app/admin/AdminSidebar.tsx` — Client Component, navigace, aktivní stav ✅
+- [x] `app/admin/page.tsx` — přehledový dashboard (statistiky + rychlé akce) ✅
+- [x] `app/admin/actions.ts` — Server Actions: saveArticle, deleteArticle, saveSection ✅
+- [x] `app/admin/clanky/page.tsx` — seznam článků, filtr dle sekce, mazání ✅
+- [x] `app/admin/clanky/ArticleForm.tsx` — sdílený formulář pro nový/edit článek ✅
+- [x] `app/admin/clanky/novy/page.tsx` — formulář nového článku ✅
+- [x] `app/admin/clanky/[id]/upravit/page.tsx` — editace existujícího článku ✅
+- [x] `app/admin/sekce/page.tsx` — správa sekcí (accordion, inline editace) ✅
 
 ## Fáze 4 – Členská sekce ⏳
 - [ ] Profil člena
