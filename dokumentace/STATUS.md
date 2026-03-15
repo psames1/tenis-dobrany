@@ -60,6 +60,10 @@
 - [x] `app/admin/clanky/novy/page.tsx` — formulář nového článku ✅
 - [x] `app/admin/clanky/[id]/upravit/page.tsx` — editace existujícího článku ✅
 - [x] `app/admin/sekce/page.tsx` — správa sekcí (accordion, inline editace) ✅
+- [x] `components/editor/RichTextEditor.tsx` — TipTap editor (H2/H3/H4, bold/italic/strike, seznamy, citace, HR, tabulky, obrázky) ✅
+- [x] Nahrávání obrázků do Supabase Storage (cover + inline + galerie panelu) ✅
+- [x] `@tailwindcss/typography` nainstalován + `.tiptap-editor` + `.article-content` CSS třídy ✅
+- [x] **Excel paste pro tabulky** — vložení zkopírovaných buněk z Excelu (Ctrl+V) funguje automaticky přes TipTap table extension ✅
 
 ## Fáze 4 – Členská sekce ⏳
 - [ ] Profil člena

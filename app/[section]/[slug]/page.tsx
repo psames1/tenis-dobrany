@@ -118,9 +118,7 @@ export default async function ArticlePage({ params }: Props) {
 
         {page.content && (
           <div
-            className="prose prose-green max-w-none text-gray-700
-              prose-headings:text-gray-900 prose-a:text-green-600 prose-a:no-underline
-              hover:prose-a:underline prose-img:rounded-xl"
+            className="article-content"
             dangerouslySetInnerHTML={{ __html: page.content }}
           />
         )}

@@ -1,6 +1,10 @@
 'use client'
 
+import { useState, useRef } from 'react'
 import { saveArticle } from '../actions'
+import { RichTextEditor } from '@/components/editor/RichTextEditor'
+import { createClient } from '@/lib/supabase/client'
+import { ImageIcon, X } from 'lucide-react'
 
 type Section = { id: string; slug: string; title: string }
 
@@ -22,11 +26,43 @@ type Props = {
   article?: Article
 }
 
+async function uploadCoverImage(file: File): Promise<string> {
+  const supabase = createClient()
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage
+    .from('images')
+    .upload(path, file, { cacheControl: '31536000', upsert: false })
+  if (error) throw new Error(error.message)
+  return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
+}
+
 export function ArticleForm({ sections, article }: Props) {
   const isEdit = !!article
   const publishedDate = article?.published_at
     ? new Date(article.published_at).toISOString().slice(0, 16)
     : new Date().toISOString().slice(0, 16)
+
+  const [coverUrl, setCoverUrl] = useState(article?.image_url ?? '')
+  const [coverUploading, setCoverUploading] = useState(false)
+  const [coverError, setCoverError] = useState<string | null>(null)
+  const coverFileRef = useRef<HTMLInputElement>(null)
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCoverUploading(true)
+    setCoverError(null)
+    try {
+      const url = await uploadCoverImage(file)
+      setCoverUrl(url)
+    } catch {
+      setCoverError('Nepodařilo se nahrát obrázek.')
+    } finally {
+      setCoverUploading(false)
+      e.target.value = ''
+    }
+  }
 
   return (
     <form action={saveArticle} className="space-y-5">
@@ -70,46 +106,82 @@ export function ArticleForm({ sections, article }: Props) {
       {/* Perex */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="excerpt">
-          Perex (krátký popis)
+          Perex (krátký popis pro výpis)
         </label>
         <textarea
           id="excerpt"
           name="excerpt"
           rows={3}
           defaultValue={article?.excerpt ?? ''}
-          placeholder="Krátký popis pro výpis článků…"
+          placeholder="Krátký popis zobrazený ve výpisu článků…"
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
         />
       </div>
 
-      {/* Obsah */}
+      {/* Náhledový obrázek */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="content">
-          Obsah (HTML)
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Náhledový obrázek (cover)
         </label>
-        <textarea
-          id="content"
-          name="content"
-          rows={14}
-          defaultValue={article?.content ?? ''}
-          placeholder="<p>Obsah článku…</p>"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y"
-        />
-        <p className="mt-1 text-xs text-gray-400">Obsah se uloží jako HTML. V budoucnu bude přidán rich-text editor.</p>
+        <div className="flex gap-3 items-start">
+          {/* Preview */}
+          {coverUrl ? (
+            <div className="relative shrink-0">
+              <img
+                src={coverUrl}
+                alt="Náhled"
+                className="w-32 h-20 object-cover rounded-lg border border-gray-200"
+              />
+              <button
+                type="button"
+                onClick={() => setCoverUrl('')}
+                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                title="Odebrat obrázek"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-32 h-20 bg-gray-100 rounded-lg border border-dashed border-gray-300 flex items-center justify-center shrink-0">
+              <ImageIcon size={20} className="text-gray-400" />
+            </div>
+          )}
+
+          {/* URL + upload */}
+          <div className="flex-1 space-y-2">
+            <input
+              name="image_url"
+              type="text"
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              placeholder="https://... nebo nahrajte soubor →"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            />
+            <div>
+              <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+              <button
+                type="button"
+                onClick={() => coverFileRef.current?.click()}
+                disabled={coverUploading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                <ImageIcon size={13} />
+                {coverUploading ? 'Nahrávám…' : 'Nahrát ze souboru'}
+              </button>
+              {coverError && <span className="ml-2 text-xs text-red-600">{coverError}</span>}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* URL obrázku */}
+      {/* Obsah — TipTap editor */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="image_url">
-          URL náhledového obrázku
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Obsah článku
         </label>
-        <input
-          id="image_url"
-          name="image_url"
-          type="url"
-          defaultValue={article?.image_url ?? ''}
-          placeholder="https://..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        <RichTextEditor
+          name="content"
+          defaultValue={article?.content}
         />
       </div>
 
@@ -169,3 +241,4 @@ export function ArticleForm({ sections, article }: Props) {
     </form>
   )
 }
+

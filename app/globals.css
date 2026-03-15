@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -126,4 +127,104 @@
   html {
     @apply font-sans;
   }
+}
+
+/* ── TipTap editor styles ────────────────────────────────────────────────── */
+
+.tiptap-editor {
+  /* Nadpisy */
+  h2 { @apply text-2xl font-bold text-gray-900 mt-6 mb-3 leading-tight; }
+  h3 { @apply text-xl font-semibold text-gray-900 mt-5 mb-2 leading-tight; }
+  h4 { @apply text-lg font-semibold text-gray-800 mt-4 mb-2 leading-tight; }
+
+  /* Odstavce */
+  p { @apply my-2 leading-relaxed text-gray-700; }
+  p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    @apply text-gray-400 pointer-events-none float-left h-0;
+  }
+
+  /* Tučné / kurzíva */
+  strong { @apply font-semibold; }
+  em { @apply italic; }
+  s { @apply line-through; }
+
+  /* Seznamy */
+  ul { @apply list-disc pl-6 my-3 space-y-1; }
+  ol { @apply list-decimal pl-6 my-3 space-y-1; }
+  li { @apply text-gray-700; }
+  li p { @apply my-0; }
+
+  /* Citace */
+  blockquote {
+    @apply border-l-4 border-green-400 pl-4 my-4 italic text-gray-600 bg-green-50 py-2 pr-3 rounded-r-lg;
+  }
+
+  /* Horizontální čára */
+  hr { @apply my-6 border-gray-200; }
+
+  /* Obrázky */
+  img.article-img {
+    @apply max-w-full rounded-xl my-4 shadow-sm border border-gray-100;
+    max-height: 600px;
+    object-fit: cover;
+  }
+
+  /* Tabulky */
+  table {
+    @apply w-full border-collapse my-4 text-sm;
+  }
+  table th {
+    @apply bg-green-700 text-white font-semibold px-3 py-2 text-left border border-green-800;
+  }
+  table td {
+    @apply px-3 py-2 border border-gray-200 text-gray-700 align-top;
+  }
+  table tr:nth-child(even) td {
+    @apply bg-gray-50;
+  }
+  table tr:hover td {
+    @apply bg-green-50;
+  }
+  /* Výběr buněk tabulky */
+  .selectedCell {
+    @apply bg-green-100 relative;
+  }
+  .column-resize-handle {
+    @apply absolute right-0 top-0 bottom-0 w-1 bg-green-400 pointer-events-none;
+  }
+}
+
+/* ── Article content (veřejný výstup článku) ───────────────────────────── */
+.article-content {
+  h2 { @apply text-2xl font-bold text-gray-900 mt-8 mb-3; }
+  h3 { @apply text-xl font-semibold text-gray-900 mt-6 mb-2; }
+  h4 { @apply text-lg font-semibold text-gray-800 mt-5 mb-2; }
+  p  { @apply my-3 leading-relaxed text-gray-700; }
+  ul { @apply list-disc pl-6 my-3 space-y-1; }
+  ol { @apply list-decimal pl-6 my-3 space-y-1; }
+  li { @apply text-gray-700; }
+  blockquote {
+    @apply border-l-4 border-green-400 pl-4 my-5 italic text-gray-600 bg-green-50 py-2 pr-3 rounded-r-lg;
+  }
+  hr { @apply my-8 border-gray-200; }
+  img {
+    @apply max-w-full rounded-xl my-5 shadow-sm;
+    max-height: 600px;
+    object-fit: cover;
+  }
+  table {
+    @apply w-full border-collapse my-5 text-sm overflow-x-auto block;
+  }
+  table th {
+    @apply bg-green-700 text-white font-semibold px-3 py-2 text-left border border-green-800;
+  }
+  table td {
+    @apply px-3 py-2 border border-gray-200 text-gray-700 align-top;
+  }
+  table tr:nth-child(even) td {
+    @apply bg-gray-50;
+  }
+  a { @apply text-green-600 underline hover:text-green-800; }
+  strong { @apply font-semibold; }
 }

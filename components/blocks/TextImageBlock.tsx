@@ -16,11 +16,11 @@ export function TextImageBlock({ title, content, icon, imagePosition = 'right' }
     <div className="flex flex-col justify-center">
       <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">{title}</h2>
       {content && (
-        <div
-          className="prose prose-green max-w-none text-gray-600 leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
-      )}
+          <div
+            className="article-content"
+            dangerouslySetInnerHTML={{ __html: content }}
+          />
+        )}
     </div>
   )
 
