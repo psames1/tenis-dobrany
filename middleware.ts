@@ -1,6 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Routes requiring an authenticated session
+const PROTECTED_PREFIXES = ['/clenove', '/admin']
+// Routes only for unauthenticated users (redirect away if already logged in)
+const AUTH_ONLY_PATHS = ['/login']
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -25,9 +30,24 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh the session — do NOT remove this call.
-  // It keeps the user's session alive and syncs auth cookies.
-  await supabase.auth.getUser()
+  // IMPORTANT: Always call getUser() — refreshes the session token.
+  // Do NOT replace with getSession() — getSession() trusts the cookie
+  // without re-validating with the Supabase server.
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { pathname } = request.nextUrl
+
+  // Unauthenticated user tries to access a protected route
+  if (!user && PROTECTED_PREFIXES.some(p => pathname.startsWith(p))) {
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // Authenticated user tries to access /login — send them home
+  if (user && AUTH_ONLY_PATHS.includes(pathname)) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
 
   return supabaseResponse
 }
@@ -38,7 +58,7 @@ export const config = {
      * Match all request paths except:
      * - _next/static  (static files)
      * - _next/image   (image optimisation)
-     * - favicon.ico, sitemap.xml, robots.txt
+     * - favicon.ico, sitemap.xml, robots.txt, static assets
      */
     '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
