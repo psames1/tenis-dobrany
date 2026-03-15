@@ -6,7 +6,7 @@ const PROTECTED_PREFIXES = ['/clenove', '/admin']
 // Routes only for unauthenticated users (redirect away if already logged in)
 const AUTH_ONLY_PATHS = ['/login']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
