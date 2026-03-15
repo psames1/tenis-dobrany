@@ -28,8 +28,9 @@
 -- =============================================================================
 
 -- Triggery (musí být před DROP FUNCTION)
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP TRIGGER IF EXISTS set_updated_at       ON public.site_settings;
+DROP TRIGGER IF EXISTS on_auth_user_email_updated ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_created       ON auth.users;
+DROP TRIGGER IF EXISTS set_updated_at             ON public.site_settings;
 DROP TRIGGER IF EXISTS set_updated_at       ON public.user_profiles;
 DROP TRIGGER IF EXISTS set_updated_at       ON public.footer_content;
 DROP TRIGGER IF EXISTS set_updated_at       ON public.page_components;
@@ -37,8 +38,9 @@ DROP TRIGGER IF EXISTS set_updated_at       ON public.pages;
 DROP TRIGGER IF EXISTS set_updated_at       ON public.sections;
 
 -- Funkce
-DROP FUNCTION IF EXISTS public.handle_new_user()   CASCADE;
-DROP FUNCTION IF EXISTS public.handle_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS public.handle_user_email_change() CASCADE;
+DROP FUNCTION IF EXISTS public.handle_new_user()          CASCADE;
+DROP FUNCTION IF EXISTS public.handle_updated_at()        CASCADE;
 
 -- Tabulky (CASCADE automaticky vyřeší FK závislosti)
 DROP TABLE IF EXISTS public.site_settings   CASCADE;
@@ -190,6 +192,7 @@ COMMENT ON COLUMN public.footer_content.data       IS 'Příklad links_list: [{"
 
 CREATE TABLE public.user_profiles (
   id              UUID            PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email           TEXT,                           -- synchronizováno z auth.users.email
   full_name       TEXT,
   phone           TEXT,
   role            public.app_role NOT NULL DEFAULT 'member',
@@ -199,8 +202,9 @@ CREATE TABLE public.user_profiles (
   updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE  public.user_profiles         IS 'Profily uživatelů — rozšíření auth.users o roli a metadata';
-COMMENT ON COLUMN public.user_profiles.role    IS 'member | manager | admin — kaskádová kontrola v RLS';
+COMMENT ON TABLE  public.user_profiles          IS 'Profily uživatelů — rozšíření auth.users o roli a metadata';
+COMMENT ON COLUMN public.user_profiles.email    IS 'Denormalizováno z auth.users.email — sync přes trigger on_auth_user_email_updated';
+COMMENT ON COLUMN public.user_profiles.role     IS 'member | manager | admin — kaskádová kontrola v RLS';
 
 
 -- -----------------------------------------------------------------------------
@@ -316,9 +320,10 @@ CREATE TRIGGER set_updated_at
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, full_name, role)
+  INSERT INTO public.user_profiles (id, email, full_name, role)
   VALUES (
     NEW.id,
+    NEW.email,
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
     'member'
   );
@@ -329,3 +334,24 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- -----------------------------------------------------------------------------
+-- 11. Trigger — sync emailu při změně v Supabase Auth
+-- -----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.handle_user_email_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE public.user_profiles
+  SET email = NEW.email
+  WHERE id = NEW.id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_email_updated
+  AFTER UPDATE OF email ON auth.users
+  FOR EACH ROW
+  WHEN (OLD.email IS DISTINCT FROM NEW.email)
+  EXECUTE FUNCTION public.handle_user_email_change();

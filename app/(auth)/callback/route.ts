@@ -24,33 +24,54 @@ export async function GET(request: Request) {
   // Guard against open-redirect: only allow relative paths
   const safeNext = next.startsWith('/') ? next : '/'
 
-  if (code) {
-    const cookieStore = await cookies()
+  console.log('[callback] code present:', !!code, '| next:', safeNext, '| origin:', origin)
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-
-    if (!error) {
-      return NextResponse.redirect(new URL(safeNext, origin))
-    }
+  if (!code) {
+    console.warn('[callback] no code param in URL')
+    return NextResponse.redirect(new URL('/login?error=auth', origin))
   }
 
-  // Something went wrong — back to login with an error flag
-  return NextResponse.redirect(new URL('/login?error=auth', origin))
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Detect the common misconfiguration where the anon key is set to the
+  // project reference ID instead of the full JWT (eyJ...).
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[callback] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing')
+    return NextResponse.redirect(new URL('/login?error=config', origin))
+  }
+  if (!supabaseAnonKey.startsWith('eyJ')) {
+    console.error(
+      '[callback] NEXT_PUBLIC_SUPABASE_ANON_KEY looks invalid — expected a JWT starting with "eyJ", got:',
+      supabaseAnonKey.slice(0, 20)
+    )
+    return NextResponse.redirect(new URL('/login?error=config', origin))
+  }
+
+  const cookieStore = await cookies()
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) =>
+          cookieStore.set(name, value, options)
+        )
+      },
+    },
+  })
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
+
+  console.log('[callback] exchangeCodeForSession error:', error?.message ?? 'none')
+
+  if (!error) {
+    return NextResponse.redirect(new URL(safeNext, origin))
+  }
+
+  return NextResponse.redirect(
+    new URL(`/login?error=auth&detail=${encodeURIComponent(error.message)}`, origin)
+  )
 }
