@@ -15,7 +15,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
   const { success, error } = await (searchParams as unknown as Promise<{ success?: string; error?: string }>)
   const supabase = await createClient()
 
-  const [{ data: article }, { data: sections }, { data: galleryImages }] = await Promise.all([
+  const [{ data: article }, { data: sections }, { data: galleryImages }, { data: contributors }] = await Promise.all([
     supabase
       .from('pages')
       .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, published_at')
@@ -31,6 +31,11 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
       .select('id, public_url, alt_text, sort_order')
       .eq('page_id', id)
       .order('sort_order'),
+    supabase
+      .from('article_contributors')
+      .select('id, email, user_id, user_profiles(full_name)')
+      .eq('page_id', id)
+      .order('invited_at'),
   ])
 
   if (!article) notFound()
@@ -58,7 +63,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
         </div>
       )}
 
-      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} />
+      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} />
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { saveArticle } from '../actions'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { createClient } from '@/lib/supabase/client'
 import { ImageIcon, ImagePlus, X } from 'lucide-react'
+import { ArticleContributors, type ContributorRecord } from './ArticleContributors'
 
 type Section = { id: string; slug: string; title: string }
 
@@ -34,6 +35,7 @@ type Props = {
   sections: Section[]
   article?: Article
   galleryImages?: GalleryImage[]
+  contributors?: ContributorRecord[]
 }
 
 async function uploadGalleryImage(file: File): Promise<string> {
@@ -58,7 +60,7 @@ async function uploadCoverImage(file: File): Promise<string> {
   return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
 }
 
-export function ArticleForm({ sections, article, galleryImages }: Props) {
+export function ArticleForm({ sections, article, galleryImages, contributors }: Props) {
   const isEdit = !!article
   const publishedDate = article?.published_at
     ? new Date(article.published_at).toISOString().slice(0, 16)
@@ -341,6 +343,16 @@ export function ArticleForm({ sections, article, galleryImages }: Props) {
           <span className="text-sm text-gray-700">Pouze pro přihlášené členy</span>
         </label>
       </div>
+
+      {/* Spoluautoři — pouze v režimu úpravy */}
+      {isEdit && article?.id && (
+        <div className="border border-gray-200 rounded-xl p-4">
+          <ArticleContributors
+            articleId={article.id}
+            contributors={contributors ?? []}
+          />
+        </div>
+      )}
 
       {/* Tlačítka */}
       <div className="flex gap-3 pt-2">

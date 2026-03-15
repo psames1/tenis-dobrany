@@ -63,14 +63,22 @@ export async function Navigation() {
           <div className="flex items-center gap-2">
             {/* Desktop: přihlášení tlačítko */}
             {authUser ? (
-              <form action="/logout" method="POST" className="hidden md:block">
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:text-red-600 transition-colors"
+              <div className="hidden md:flex items-center gap-2">
+                <Link
+                  href="/clenove"
+                  className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
                 >
-                  Odhlásit
-                </button>
-              </form>
+                  Moje konto
+                </Link>
+                <form action="/logout" method="POST">
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:text-red-600 transition-colors"
+                  >
+                    Odhlásit
+                  </button>
+                </form>
+              </div>
             ) : (
               <Link
                 href="/login"
