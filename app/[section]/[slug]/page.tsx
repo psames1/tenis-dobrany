@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { ArticleGallery } from '@/components/gallery/ArticleGallery'
 
 type Props = {
   params: Promise<{ section: string; slug: string }>
@@ -74,6 +75,12 @@ export default async function ArticlePage({ params }: Props) {
     redirect(`/login?redirectTo=/${sectionSlug}/${slug}`)
   }
 
+  const { data: galleryImages } = await supabase
+    .from('page_gallery')
+    .select('public_url, alt_text')
+    .eq('page_id', page.id)
+    .order('sort_order')
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Breadcrumb */}
@@ -122,6 +129,10 @@ export default async function ArticlePage({ params }: Props) {
             dangerouslySetInnerHTML={{ __html: page.content }}
           />
         )}
+
+        <ArticleGallery
+          images={(galleryImages ?? []).map(g => ({ url: g.public_url, alt: g.alt_text }))}
+        />
       </article>
 
       <div className="mt-12 pt-6 border-t border-gray-100">

@@ -53,6 +53,8 @@ export async function saveArticle(formData: FormData) {
 
   const slug = toSlug(title)
 
+  let targetId: string
+
   if (id) {
     // ── Úprava existujícího článku ─────────────────────────────────────────
     const { error } = await supabase
@@ -73,7 +75,7 @@ export async function saveArticle(formData: FormData) {
     if (error) {
       redirect(`/admin/clanky/${id}/upravit?error=${encodeURIComponent(error.message)}`)
     }
-    redirect(`/admin/clanky/${id}/upravit?success=1`)
+    targetId = id
   } else {
     // ── Nový článek ───────────────────────────────────────────────────────
     const { data: inserted, error } = await supabase
@@ -96,8 +98,30 @@ export async function saveArticle(formData: FormData) {
     if (error) {
       redirect(`/admin/clanky/novy?error=${encodeURIComponent(error.message)}`)
     }
-    redirect(`/admin/clanky/${inserted.id}/upravit?success=1`)
+    targetId = inserted.id
   }
+
+  // ── Uložit fotogalerii ────────────────────────────────────────────────────
+  const galleryUrlsRaw = formData.get('gallery_urls') as string | null
+  if (galleryUrlsRaw !== null) {
+    try {
+      const urls = JSON.parse(galleryUrlsRaw) as string[]
+      await supabase.from('page_gallery').delete().eq('page_id', targetId)
+      if (urls.length > 0) {
+        await supabase.from('page_gallery').insert(
+          urls.map((url, i) => ({
+            page_id: targetId,
+            public_url: url,
+            sort_order: i,
+          }))
+        )
+      }
+    } catch {
+      // Chyba galerie je nekritická — článek byl uložen
+    }
+  }
+
+  redirect(`/admin/clanky/${targetId}/upravit?success=1`)
 }
 
 // ─── Smazat článek ───────────────────────────────────────────────────────────

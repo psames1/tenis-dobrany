@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { saveArticle } from '../actions'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { createClient } from '@/lib/supabase/client'
-import { ImageIcon, X } from 'lucide-react'
+import { ImageIcon, ImagePlus, X } from 'lucide-react'
 
 type Section = { id: string; slug: string; title: string }
 
@@ -21,9 +21,30 @@ type Article = {
   published_at: string
 }
 
+type GalleryImage = {
+  id: string
+  public_url: string
+  alt_text: string | null
+  sort_order: number
+}
+
+type LocalGalleryImg = { url: string }
+
 type Props = {
   sections: Section[]
   article?: Article
+  galleryImages?: GalleryImage[]
+}
+
+async function uploadGalleryImage(file: File): Promise<string> {
+  const supabase = createClient()
+  const ext = file.name.split('.').pop() ?? 'jpg'
+  const path = `galleries/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage
+    .from('images')
+    .upload(path, file, { cacheControl: '31536000', upsert: false })
+  if (error) throw new Error(error.message)
+  return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
 }
 
 async function uploadCoverImage(file: File): Promise<string> {
@@ -37,7 +58,7 @@ async function uploadCoverImage(file: File): Promise<string> {
   return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
 }
 
-export function ArticleForm({ sections, article }: Props) {
+export function ArticleForm({ sections, article, galleryImages }: Props) {
   const isEdit = !!article
   const publishedDate = article?.published_at
     ? new Date(article.published_at).toISOString().slice(0, 16)
@@ -47,6 +68,32 @@ export function ArticleForm({ sections, article }: Props) {
   const [coverUploading, setCoverUploading] = useState(false)
   const [coverError, setCoverError] = useState<string | null>(null)
   const coverFileRef = useRef<HTMLInputElement>(null)
+
+  const [gallery, setGallery] = useState<LocalGalleryImg[]>(
+    (galleryImages ?? []).map(g => ({ url: g.public_url }))
+  )
+  const [galleryUploading, setGalleryUploading] = useState(false)
+  const [galleryError, setGalleryError] = useState<string | null>(null)
+  const galleryFileRef = useRef<HTMLInputElement>(null)
+
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    setGalleryUploading(true)
+    setGalleryError(null)
+    try {
+      const uploaded: string[] = []
+      for (const file of files) {
+        uploaded.push(await uploadGalleryImage(file))
+      }
+      setGallery(prev => [...prev, ...uploaded.map(url => ({ url }))])
+    } catch (err: unknown) {
+      setGalleryError(err instanceof Error ? err.message : 'Chyba při nahrávání fotek.')
+    } finally {
+      setGalleryUploading(false)
+      e.target.value = ''
+    }
+  }
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -183,6 +230,78 @@ export function ArticleForm({ sections, article }: Props) {
           name="content"
           defaultValue={article?.content}
         />
+      </div>
+
+      {/* Fotogalerie */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Fotogalerie
+          </label>
+          <div>
+            <input
+              ref={galleryFileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleGalleryUpload}
+            />
+            <button
+              type="button"
+              onClick={() => galleryFileRef.current?.click()}
+              disabled={galleryUploading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <ImagePlus size={13} />
+              {galleryUploading ? 'Nahrávám…' : 'Přidat fotky'}
+            </button>
+          </div>
+        </div>
+
+        <input
+          type="hidden"
+          name="gallery_urls"
+          value={JSON.stringify(gallery.map(g => g.url))}
+        />
+
+        {galleryError && (
+          <p className="text-xs text-red-600 mb-2">{galleryError}</p>
+        )}
+
+        {gallery.length === 0 ? (
+          <div className="py-6 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
+            Žádné fotky. Klikněte na „Přidat fotky" pro nahrání.
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            {gallery.map((img, i) => (
+              <div key={i} className="relative group aspect-square">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.url}
+                  alt={`Foto ${i + 1}`}
+                  className="w-full h-full object-cover rounded-lg border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    setGallery(prev => prev.filter((_, idx) => idx !== i))
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                  title="Odebrat"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs text-gray-400 mt-1.5">
+          Fotky se zobrazí pod článkem v mřížce. Po kliknutí se otevře lightbox.
+        </p>
       </div>
 
       {/* Datum publikace */}
