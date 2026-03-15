@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { deleteArticle } from '../actions'
 import type { Metadata } from 'next'
+import { DeleteArticleButton } from './DeleteArticleButton'
 
 export const metadata: Metadata = { title: 'Admin – Články' }
 
@@ -117,18 +117,7 @@ export default async function AdminArticlesPage({
                         >
                           Upravit
                         </Link>
-                        <form action={deleteArticle}>
-                          <input type="hidden" name="id" value={article.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-red-400 hover:text-red-600 font-medium transition-colors"
-                            onClick={(e) => {
-                              if (!confirm(`Smazat „${article.title}"?`)) e.preventDefault()
-                            }}
-                          >
-                            Smazat
-                          </button>
-                        </form>
+                        <DeleteArticleButton id={article.id} title={article.title} />
                       </div>
                     </td>
                   </tr>
