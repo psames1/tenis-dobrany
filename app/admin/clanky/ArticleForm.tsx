@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { saveArticle } from '../actions'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { createClient } from '@/lib/supabase/client'
-import { ImageIcon, ImagePlus, X, FileUp, FilePlus, FileDown } from 'lucide-react'
+import { ImageIcon, ImagePlus, X, FileUp, FileDown } from 'lucide-react'
 import { ArticleContributors, type ContributorRecord } from './ArticleContributors'
 
 type Section = { id: string; slug: string; title: string }
@@ -22,6 +22,7 @@ type Article = {
   show_in_menu: boolean
   sort_order: number
   allow_comments: boolean
+  visibility: string
   published_at: string
 }
 
@@ -36,6 +37,7 @@ type DocumentItem = {
   title: string
   description: string
   file_url: string
+  document_date: string  // YYYY-MM-DD
 }
 
 type LocalGalleryImg = { url: string }
@@ -57,6 +59,10 @@ async function uploadDocumentFile(file: File): Promise<string> {
     .upload(path, file, { cacheControl: '31536000', upsert: false })
   if (error) throw new Error(error.message)
   return supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
 }
 
 async function uploadGalleryImage(file: File): Promise<string> {
@@ -99,28 +105,69 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
   const [galleryError, setGalleryError] = useState<string | null>(null)
   const galleryFileRef = useRef<HTMLInputElement>(null)
 
-  const [documents, setDocuments] = useState<DocumentItem[]>(savedDocuments ?? [])
+  const [documents, setDocuments] = useState<DocumentItem[]>(
+    (savedDocuments ?? []).map(d => ({
+      ...d,
+      document_date: (d as DocumentItem).document_date ?? todayIso(),
+    }))
+  )
   const [docUploading, setDocUploading] = useState(false)
   const [docError, setDocError] = useState<string | null>(null)
   const docFileRef = useRef<HTMLInputElement>(null)
+  const replaceDocFileRef = useRef<HTMLInputElement>(null)
+  const [replaceIndex, setReplaceIndex] = useState<number | null>(null)
 
   function updateDoc(index: number, field: keyof DocumentItem, value: string) {
     setDocuments(prev => prev.map((d, i) => i === index ? { ...d, [field]: value } : d))
   }
 
+  // Hromadný upload nových souborů
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
     setDocUploading(true)
     setDocError(null)
     try {
-      const url = await uploadDocumentFile(file)
-      setDocuments(prev => [...prev, { title: file.name.replace(/\.[^.]+$/, ''), description: '', file_url: url }])
+      const today = todayIso()
+      const uploaded: DocumentItem[] = []
+      for (const file of files) {
+        const url = await uploadDocumentFile(file)
+        uploaded.push({
+          title: file.name.replace(/\.[^.]+$/, ''),
+          description: '',
+          file_url: url,
+          document_date: today,
+        })
+      }
+      setDocuments(prev => [...prev, ...uploaded])
     } catch (err: unknown) {
       setDocError(err instanceof Error ? err.message : 'Chyba při nahrávání souboru.')
     } finally {
       setDocUploading(false)
       e.target.value = ''
+    }
+  }
+
+  // Nahradit soubor u konkrétního záznamu
+  const handleReplaceDocClick = (i: number) => {
+    setReplaceIndex(i)
+    replaceDocFileRef.current?.click()
+  }
+
+  const handleReplaceDoc = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || replaceIndex === null) return
+    setDocUploading(true)
+    setDocError(null)
+    try {
+      const url = await uploadDocumentFile(file)
+      setDocuments(prev => prev.map((d, i) => i === replaceIndex ? { ...d, file_url: url } : d))
+    } catch (err: unknown) {
+      setDocError(err instanceof Error ? err.message : 'Chyba při nahrávání souboru.')
+    } finally {
+      setDocUploading(false)
+      e.target.value = ''
+      setReplaceIndex(null)
     }
   }
 
@@ -354,12 +401,15 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
 
       {/* Přílohy (dokumenty) */}
       <div>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <label className="block text-sm font-medium text-gray-700">
             Přílohy (dokumenty ke stažení)
           </label>
           <div className="flex gap-2">
-            <input ref={docFileRef} type="file" className="hidden" onChange={handleDocUpload} />
+            {/* Hromadný upload nových souborů */}
+            <input ref={docFileRef} type="file" multiple className="hidden" onChange={handleDocUpload} />
+            {/* Input pro nahrazení konkrétního souboru (single) */}
+            <input ref={replaceDocFileRef} type="file" className="hidden" onChange={handleReplaceDoc} />
             <button
               type="button"
               onClick={() => docFileRef.current?.click()}
@@ -367,78 +417,93 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               <FileUp size={13} />
-              {docUploading ? 'Nahrávám…' : 'Nahrát soubor'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDocuments(prev => [...prev, { title: '', description: '', file_url: '' }])}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <FilePlus size={13} />
-              Přidat odkaz
+              {docUploading ? 'Nahrávám…' : 'Nahrát soubory'}
             </button>
           </div>
         </div>
 
-        <input
-          type="hidden"
-          name="documents_json"
-          value={JSON.stringify(documents)}
-        />
+        <input type="hidden" name="documents_json" value={JSON.stringify(documents)} />
 
         {docError && <p className="text-xs text-red-600 mb-2">{docError}</p>}
 
         {documents.length === 0 ? (
-          <div className="py-5 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
-            Žádné přílohy. Nahrajte soubor nebo přidejte odkaz.
+          <div className="py-6 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
+            Žádné přílohy. Klikněte na „Nahrát soubory" pro přidání.
           </div>
         ) : (
-          <div className="space-y-2">
-            {documents.map((doc, i) => (
-              <div key={i} className="flex gap-2 items-start p-3 border border-gray-200 rounded-lg bg-gray-50">
-                <div className="flex-1 space-y-1.5 min-w-0">
-                  <input
-                    value={doc.title}
-                    onChange={e => updateDoc(i, 'title', e.target.value)}
-                    placeholder="Název přílohy *"
-                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-                  />
-                  <input
-                    value={doc.description}
-                    onChange={e => updateDoc(i, 'description', e.target.value)}
-                    placeholder="Popis (volitelný)"
-                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-                  />
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={doc.file_url}
-                      onChange={e => updateDoc(i, 'file_url', e.target.value)}
-                      placeholder="URL souboru (https://…)"
-                      className="flex-1 min-w-0 px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-green-500 bg-white font-mono"
-                    />
-                    {doc.file_url && (
-                      <a
-                        href={doc.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 text-green-600 hover:text-green-800"
-                        title="Otevřít soubor"
-                      >
-                        <FileDown size={15} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDocuments(prev => prev.filter((_, idx) => idx !== i))}
-                  className="shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors"
-                  title="Odebrat přílohu"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ))}
+          <div className="overflow-hidden rounded-xl border border-gray-200">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                  <th className="px-3 py-2 text-left font-medium">Název *</th>
+                  <th className="px-3 py-2 text-left font-medium w-36">Datum</th>
+                  <th className="px-3 py-2 text-left font-medium">Popis</th>
+                  <th className="px-3 py-2 w-24"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {documents.map((doc, i) => (
+                  <tr key={i} className="hover:bg-gray-50/50">
+                    <td className="px-3 py-2">
+                      <input
+                        value={doc.title}
+                        onChange={e => updateDoc(i, 'title', e.target.value)}
+                        placeholder="Název *"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="date"
+                        value={doc.document_date}
+                        onChange={e => updateDoc(i, 'document_date', e.target.value)}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        value={doc.description}
+                        onChange={e => updateDoc(i, 'description', e.target.value)}
+                        placeholder="Popis (volitelný)"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        {doc.file_url && (
+                          <a
+                            href={doc.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-green-600 hover:text-green-800 transition-colors"
+                            title="Stáhnout / otevřít"
+                          >
+                            <FileDown size={15} />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleReplaceDocClick(i)}
+                          disabled={docUploading}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-40"
+                          title="Nahradit soubor"
+                        >
+                          <FileUp size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocuments(prev => prev.filter((_, idx) => idx !== i))}
+                          className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+                          title="Odebrat přílohu"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -459,6 +524,27 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
 
       {/* Přepínače + pořadí */}
       <div className="space-y-3">
+        {/* Viditelnost */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="visibility">
+            Viditelnost článku
+          </label>
+          <select
+            id="visibility"
+            name="visibility"
+            defaultValue={article?.visibility ?? 'public'}
+            className="w-full sm:w-72 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+          >
+            <option value="public">Veřejný — vidí všichni</option>
+            <option value="member">Přihlášení členové</option>
+            <option value="editor">Manager a administrátor</option>
+            <option value="admin">Pouze administrátor</option>
+          </select>
+          <p className="text-xs text-gray-400 mt-1">
+            Určuje, kdo může článek a jeho přílohy zobrazit.
+          </p>
+        </div>
+
         <div className="flex flex-wrap gap-6 py-1">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -469,16 +555,6 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
               className="w-4 h-4 accent-green-600"
             />
             <span className="text-sm text-gray-700">Aktivní (zobrazit na webu)</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              name="is_members_only"
-              value="1"
-              defaultChecked={article?.is_members_only ?? false}
-              className="w-4 h-4 accent-green-600"
-            />
-            <span className="text-sm text-gray-700">Pouze pro přihlášené členy</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input

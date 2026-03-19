@@ -37,6 +37,10 @@ COMMENT ON TABLE public.page_documents IS 'Přílohy (PDF, DOCX, …) připojen�
 -- RLS
 ALTER TABLE public.page_documents ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "page_documents: public read"  ON public.page_documents;
+DROP POLICY IF EXISTS "page_documents: member read"  ON public.page_documents;
+DROP POLICY IF EXISTS "page_documents: manager all"  ON public.page_documents;
+
 -- Veřejné čtení: příloha veřejného článku
 CREATE POLICY "page_documents: public read" ON public.page_documents
   FOR SELECT
@@ -91,6 +95,11 @@ COMMENT ON TABLE public.page_comments IS 'Komentáře přihlášených členů p
 -- RLS
 ALTER TABLE public.page_comments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "page_comments: read"           ON public.page_comments;
+DROP POLICY IF EXISTS "page_comments: member insert"  ON public.page_comments;
+DROP POLICY IF EXISTS "page_comments: delete"         ON public.page_comments;
+DROP POLICY IF EXISTS "page_comments: manager update" ON public.page_comments;
+
 -- Čtení: aktivní komentáře pod stránkami, kde jsou komentáře povoleny
 CREATE POLICY "page_comments: read" ON public.page_comments
   FOR SELECT
@@ -143,6 +152,11 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "avatars: public read"   ON storage.objects;
+DROP POLICY IF EXISTS "avatars: owner upload"  ON storage.objects;
+DROP POLICY IF EXISTS "avatars: owner update"  ON storage.objects;
+DROP POLICY IF EXISTS "avatars: owner delete"  ON storage.objects;
+
 -- Veřejné čtení
 CREATE POLICY "avatars: public read"
   ON storage.objects FOR SELECT
@@ -184,6 +198,10 @@ VALUES (
   10485760  -- 10 MB
 )
 ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "documents: public read"    ON storage.objects;
+DROP POLICY IF EXISTS "documents: manager upload" ON storage.objects;
+DROP POLICY IF EXISTS "documents: manager delete" ON storage.objects;
 
 -- Veřejné čtení (přístupnost řídí RLS na page_documents)
 CREATE POLICY "documents: public read"

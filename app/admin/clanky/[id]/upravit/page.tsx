@@ -18,7 +18,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
   const [{ data: article }, { data: sections }, { data: galleryImages }, { data: contributors }, { data: savedDocuments }] = await Promise.all([
     supabase
       .from('pages')
-      .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, show_in_menu, allow_comments, sort_order, published_at')
+      .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, show_in_menu, allow_comments, visibility, sort_order, published_at')
       .eq('id', id)
       .single(),
     supabase
@@ -38,7 +38,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
       .order('invited_at'),
     supabase
       .from('page_documents')
-      .select('title, description, file_url')
+      .select('title, description, file_url, document_date')
       .eq('page_id', id)
       .order('sort_order'),
   ])
@@ -68,7 +68,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
         </div>
       )}
 
-      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} savedDocuments={(savedDocuments ?? []) as { title: string; description: string; file_url: string }[]} />
+      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} savedDocuments={(savedDocuments ?? []) as { title: string; description: string; file_url: string; document_date: string }[]} />
     </div>
   )
 }

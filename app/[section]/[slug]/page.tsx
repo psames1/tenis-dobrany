@@ -64,7 +64,7 @@ export default async function ArticlePage({ params }: Props) {
 
   const { data: page } = await supabase
     .from('pages')
-    .select('id, slug, title, excerpt, content, image_url, is_members_only, allow_comments, published_at')
+    .select('id, slug, title, excerpt, content, image_url, visibility, allow_comments, published_at')
     .eq('section_id', section.id)
     .eq('slug', slug)
     .eq('is_active', true)
@@ -72,15 +72,30 @@ export default async function ArticlePage({ params }: Props) {
 
   if (!page) notFound()
 
-  // Ochrana: only-members obsah → přesměrovat na přihlášení
-  if (page.is_members_only && !user) {
+  // Přístupová kontrola podle visibility
+  // Nejprve zjistíme roli uživatele (potřebujeme ji pro editor/admin check)
+  let userRole: string | null = null
+  if (user) {
+    const { data: up } = await supabase
+      .from('user_profiles')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single()
+    if (up?.is_active) userRole = up.role ?? 'member'
+  }
+
+  const visibilityLevel: Record<string, number> = { public: 0, member: 1, editor: 2, admin: 3 }
+  const roleLevel: Record<string, number> = { member: 1, contributor: 1, editor: 2, manager: 3, admin: 3 }
+  const requiredLevel = visibilityLevel[page.visibility] ?? 0
+  const userLevel = userRole ? (roleLevel[userRole] ?? 1) : 0
+
+  if (requiredLevel > userLevel) {
     redirect(`/login?redirectTo=/${sectionSlug}/${slug}`)
   }
 
-  // Parallelní dotazy: galerie, role uživatele, dokumenty, komentáře
+  // Parallelní dotazy: galerie, dokumenty, komentáře
   const [
     { data: galleryImages },
-    { data: userProfile },
     { data: documents },
     { data: comments },
   ] = await Promise.all([
@@ -89,12 +104,9 @@ export default async function ArticlePage({ params }: Props) {
       .select('public_url, alt_text')
       .eq('page_id', page.id)
       .order('sort_order'),
-    user
-      ? supabase.from('user_profiles').select('role').eq('id', user.id).single()
-      : Promise.resolve({ data: null }),
     supabase
       .from('page_documents')
-      .select('id, title, description, file_url')
+      .select('id, title, description, file_url, document_date')
       .eq('page_id', page.id)
       .order('sort_order'),
     page.allow_comments
@@ -108,7 +120,6 @@ export default async function ArticlePage({ params }: Props) {
   ])
 
   // Je uživatel contributor tohoto článku?
-  const userRole = userProfile?.role ?? null
   const isPrivileged = userRole === 'admin' || userRole === 'manager'
   let isContributor = false
   if (user && !isPrivileged) {
@@ -144,9 +155,11 @@ export default async function ArticlePage({ params }: Props) {
         {/* Badges + edit pencil */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex flex-wrap gap-2">
-            {page.is_members_only && (
+            {page.visibility !== 'public' && (
               <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                Pouze pro členy
+                {page.visibility === 'member' && 'Pouze pro členy'}
+                {page.visibility === 'editor' && 'Editor a výše'}
+                {page.visibility === 'admin' && 'Pouze administrátor'}
               </span>
             )}
           </div>
@@ -209,6 +222,11 @@ export default async function ArticlePage({ params }: Props) {
                     <div className="font-medium text-gray-900 text-sm">{doc.title}</div>
                     {doc.description && (
                       <div className="text-xs text-gray-500 mt-0.5">{doc.description}</div>
+                    )}
+                    {doc.document_date && (
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {new Date(doc.document_date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
                     )}
                   </div>
                   <a

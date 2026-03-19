@@ -44,7 +44,8 @@ export async function saveArticle(formData: FormData) {
   const content    = (formData.get('content') as string | null)?.trim() || null
   const imageUrl   = (formData.get('image_url') as string | null)?.trim() || null
   const isActive   = formData.get('is_active') === '1'
-  const isMembersOnly = formData.get('is_members_only') === '1'
+  const visibility = (formData.get('visibility') as string | null) || 'public'
+  const isMembersOnly = visibility !== 'public'    // odvozeno z visibility
   const showInMenu = formData.get('show_in_menu') === '1'
   const allowComments = formData.get('allow_comments') === '1'
   const sortOrder  = parseInt((formData.get('sort_order') as string | null) ?? '0', 10) || 0
@@ -70,6 +71,7 @@ export async function saveArticle(formData: FormData) {
         image_url: imageUrl,
         is_active: isActive,
         is_members_only: isMembersOnly,
+        visibility,
         show_in_menu: showInMenu,
         allow_comments: allowComments,
         sort_order: sortOrder,
@@ -95,6 +97,7 @@ export async function saveArticle(formData: FormData) {
         image_url: imageUrl,
         is_active: isActive,
         is_members_only: isMembersOnly,
+        visibility,
         show_in_menu: showInMenu,
         allow_comments: allowComments,
         sort_order: sortOrder,
@@ -134,7 +137,7 @@ export async function saveArticle(formData: FormData) {
   const docsJson = formData.get('documents_json') as string | null
   if (docsJson !== null) {
     try {
-      type DocInput = { title: string; description: string; file_url: string }
+      type DocInput = { title: string; description: string; file_url: string; document_date?: string }
       const docs = JSON.parse(docsJson) as DocInput[]
       await supabase.from('page_documents').delete().eq('page_id', targetId)
       const validDocs = docs.filter(d => d.title?.trim() && d.file_url?.trim())
@@ -145,6 +148,7 @@ export async function saveArticle(formData: FormData) {
             title: d.title.trim(),
             description: d.description?.trim() || null,
             file_url: d.file_url.trim(),
+            document_date: d.document_date || new Date().toISOString().slice(0, 10),
             sort_order: i,
           }))
         )
