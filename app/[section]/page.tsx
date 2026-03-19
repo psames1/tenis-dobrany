@@ -52,6 +52,7 @@ export default async function SectionPage({ params }: Props) {
     .select('id, slug, title, excerpt, image_url, published_at, is_members_only')
     .eq('section_id', section.id)
     .eq('is_active', true)
+    .order('sort_order', { ascending: false })
     .order('published_at', { ascending: false })
 
   const articles = pages ?? []

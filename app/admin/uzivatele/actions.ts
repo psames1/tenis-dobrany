@@ -84,3 +84,24 @@ export async function inviteUser(formData: FormData) {
   revalidatePath('/admin/uzivatele')
   redirect('/admin/uzivatele?success=invited')
 }
+
+// ─── Zrušit pozvánku (smazat neaktivovaný účet) ──────────────────────────────
+
+export async function cancelInvitation(formData: FormData) {
+  await requireAdmin()
+
+  const userId = formData.get('user_id') as string | null
+  if (!userId) redirect('/admin/uzivatele?error=missing_id')
+
+  try {
+    const admin = createAdminClient()
+    const { error } = await admin.auth.admin.deleteUser(userId)
+    if (error) throw error
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Nepodařilo se zrušit pozvánku.'
+    redirect(`/admin/uzivatele?error=${encodeURIComponent(msg)}`)
+  }
+
+  revalidatePath('/admin/uzivatele')
+  redirect('/admin/uzivatele?success=invitation_cancelled')
+}

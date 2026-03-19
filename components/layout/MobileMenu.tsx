@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import Link from 'next/link'
 import type { NavItem } from './Navigation'
 
@@ -36,28 +36,50 @@ export function MobileMenu({ items, user }: Props) {
       {/* Rozbalené menu */}
       {isOpen && (
         <div className="absolute top-16 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-50">
-          <div className="max-w-6xl mx-auto px-4 py-3 space-y-1">
+          <div className="max-w-6xl mx-auto px-4 py-3 space-y-0.5">
             {items.map(item => (
-              <Link
-                key={item.id}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-700 hover:text-green-700 hover:bg-green-50 transition-colors"
-              >
-                {item.label}
-              </Link>
+              <Fragment key={item.id}>
+                <Link
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-700 hover:text-green-700 hover:bg-green-50 transition-colors"
+                >
+                  {item.label}
+                </Link>
+                {/* Podmenu — odsazené děti */}
+                {item.children?.map(child => (
+                  <Link
+                    key={child.id}
+                    href={child.href}
+                    onClick={() => setIsOpen(false)}
+                    className="block pl-7 pr-3 py-2 rounded-md text-sm text-gray-500 hover:text-green-700 hover:bg-green-50 transition-colors"
+                  >
+                    <span className="text-gray-300 mr-1.5" aria-hidden="true">└</span>
+                    {child.label}
+                  </Link>
+                ))}
+              </Fragment>
             ))}
             <div className="border-t border-gray-100 pt-2 mt-2">
               {user ? (
-                <form action="/logout" method="POST">
-                  <button
-                    type="submit"
-                    className="w-full text-left px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors"
+                <>
+                  <Link
+                    href="/clenove"
+                    onClick={() => setIsOpen(false)}
+                    className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                   >
-                    Odhlásit
-                    <span className="ml-1 text-xs text-gray-400">({user.email})</span>
-                  </button>
-                </form>
+                    Moje konto
+                  </Link>
+                  <form action="/logout" method="POST">
+                    <button
+                      type="submit"
+                      className="w-full text-left px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      Odhlásit
+                      <span className="ml-1 text-xs text-gray-400">({user.email})</span>
+                    </button>
+                  </form>
+                </>
               ) : (
                 <Link
                   href="/login"

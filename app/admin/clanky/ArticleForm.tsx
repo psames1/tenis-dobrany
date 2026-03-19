@@ -19,6 +19,8 @@ type Article = {
   image_url: string | null
   is_active: boolean
   is_members_only: boolean
+  show_in_menu: boolean
+  sort_order: number
   published_at: string
 }
 
@@ -320,28 +322,55 @@ export function ArticleForm({ sections, article, galleryImages, contributors }: 
         />
       </div>
 
-      {/* Přepínače */}
-      <div className="flex flex-wrap gap-6 py-2">
-        <label className="flex items-center gap-2 cursor-pointer">
+      {/* Přepínače + pořadí */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-6 py-1">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="is_active"
+              value="1"
+              defaultChecked={article?.is_active ?? true}
+              className="w-4 h-4 accent-green-600"
+            />
+            <span className="text-sm text-gray-700">Aktivní (zobrazit na webu)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="is_members_only"
+              value="1"
+              defaultChecked={article?.is_members_only ?? false}
+              className="w-4 h-4 accent-green-600"
+            />
+            <span className="text-sm text-gray-700">Pouze pro přihlášené členy</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="show_in_menu"
+              value="1"
+              defaultChecked={article?.show_in_menu ?? false}
+              className="w-4 h-4 accent-green-600"
+            />
+            <span className="text-sm text-gray-700">Zobrazit v menu sekce</span>
+          </label>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-700 shrink-0" htmlFor="sort_order">
+            Pořadí
+          </label>
           <input
-            type="checkbox"
-            name="is_active"
-            value="1"
-            defaultChecked={article?.is_active ?? true}
-            className="w-4 h-4 accent-green-600"
+            id="sort_order"
+            name="sort_order"
+            type="number"
+            min="0"
+            max="9999"
+            defaultValue={article?.sort_order ?? 0}
+            className="w-24 px-2 py-1.5 border border-gray-300 rounded-md text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
           />
-          <span className="text-sm text-gray-700">Aktivní (zobrazit na webu)</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            name="is_members_only"
-            value="1"
-            defaultChecked={article?.is_members_only ?? false}
-            className="w-4 h-4 accent-green-600"
-          />
-          <span className="text-sm text-gray-700">Pouze pro přihlášené členy</span>
-        </label>
+          <span className="text-xs text-gray-400">vyšší číslo = výše ve výpisu i v menu sekce</span>
+        </div>
       </div>
 
       {/* Spoluautoři — pouze v režimu úpravy */}

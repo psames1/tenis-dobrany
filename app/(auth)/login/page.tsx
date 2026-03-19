@@ -60,7 +60,9 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(
-    urlError === 'auth' ? 'Přihlášení selhalo. Zkuste to znovu.' : null
+    urlError === 'auth'      ? 'Přihlášení selhalo. Zkuste to znovu.'
+    : urlError === 'uninvited' ? 'Přihlášení zamítnuto. Váš účet nebyl pozván správcem oddílu. Kontaktujte správce pro udělení přístupu.'
+    : null
   )
   const [loadingEmail, setLoadingEmail] = useState(false)
   const [loadingGoogle, setLoadingGoogle] = useState(false)

@@ -18,7 +18,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
   const [{ data: article }, { data: sections }, { data: galleryImages }, { data: contributors }] = await Promise.all([
     supabase
       .from('pages')
-      .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, published_at')
+      .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, show_in_menu, sort_order, published_at')
       .eq('id', id)
       .single(),
     supabase

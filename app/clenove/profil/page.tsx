@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { saveProfile } from '../actions'
+import ChangePasswordForm from './ChangePasswordForm'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Členská sekce – Profil' }
@@ -97,6 +98,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
           Uložit profil
         </button>
       </form>
+
+      {/* Oddělovač */}
+      <div className="my-8 border-t border-gray-200" />
+
+      {/* Změna hesla */}
+      <ChangePasswordForm />
     </div>
   )
 }

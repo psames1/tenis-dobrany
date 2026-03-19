@@ -68,6 +68,25 @@ export async function GET(request: Request) {
   console.log('[callback] exchangeCodeForSession error:', error?.message ?? 'none')
 
   if (!error) {
+    // Guard: block uninvited OAuth users.
+    // When an admin invites someone via email, Supabase creates their account
+    // with an 'email' identity. If they later also link Google, they end up
+    // with both identities. A user who signed up via Google with NO prior
+    // email invitation will have ONLY the 'google' identity — we block them.
+    const { data: { user } } = await supabase.auth.getUser()
+    const provider = user?.app_metadata?.provider as string | undefined
+
+    if (user && provider && provider !== 'email') {
+      const identities = (user.identities ?? []) as Array<{ provider: string }>
+      const hasEmailIdentity = identities.some(i => i.provider === 'email')
+
+      if (!hasEmailIdentity) {
+        console.warn('[callback] uninvited OAuth user blocked:', user.email)
+        await supabase.auth.signOut()
+        return NextResponse.redirect(new URL('/login?error=uninvited', origin))
+      }
+    }
+
     return NextResponse.redirect(new URL(safeNext, origin))
   }
 

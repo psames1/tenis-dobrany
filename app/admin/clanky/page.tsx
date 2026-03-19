@@ -17,7 +17,8 @@ export default async function AdminArticlesPage({
     supabase.from('sections').select('id, slug, title').eq('is_active', true).order('menu_order'),
     supabase
       .from('pages')
-      .select('id, title, slug, excerpt, is_active, is_members_only, published_at, sections(title, slug)')
+      .select('id, title, slug, excerpt, is_active, is_members_only, show_in_menu, sort_order, published_at, sections(title, slug)')
+      .order('sort_order', { ascending: false })
       .order('published_at', { ascending: false }),
   ])
 
@@ -105,9 +106,16 @@ export default async function AdminArticlesPage({
                       {new Date(article.published_at).toLocaleDateString('cs-CZ')}
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${article.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {article.is_active ? 'Aktivní' : 'Skrytý'}
-                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${article.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {article.is_active ? 'Aktivní' : 'Skrytý'}
+                        </span>
+                        {article.show_in_menu && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                            V menu
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-3">

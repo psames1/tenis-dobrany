@@ -45,6 +45,8 @@ export async function saveArticle(formData: FormData) {
   const imageUrl   = (formData.get('image_url') as string | null)?.trim() || null
   const isActive   = formData.get('is_active') === '1'
   const isMembersOnly = formData.get('is_members_only') === '1'
+  const showInMenu = formData.get('show_in_menu') === '1'
+  const sortOrder  = parseInt((formData.get('sort_order') as string | null) ?? '0', 10) || 0
   const publishedAt = (formData.get('published_at') as string | null) || new Date().toISOString()
 
   if (!title || !sectionId) {
@@ -67,6 +69,8 @@ export async function saveArticle(formData: FormData) {
         image_url: imageUrl,
         is_active: isActive,
         is_members_only: isMembersOnly,
+        show_in_menu: showInMenu,
+        sort_order: sortOrder,
         published_at: publishedAt,
         updated_at: new Date().toISOString(),
       })
@@ -89,6 +93,8 @@ export async function saveArticle(formData: FormData) {
         image_url: imageUrl,
         is_active: isActive,
         is_members_only: isMembersOnly,
+        show_in_menu: showInMenu,
+        sort_order: sortOrder,
         published_at: publishedAt,
         created_by: user.id,
       })
