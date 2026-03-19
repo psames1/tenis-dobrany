@@ -6,7 +6,7 @@ import type { NavItem } from './Navigation'
 
 type Props = {
   items: NavItem[]
-  user: { email: string } | null
+  user: { email: string; fullName?: string | null; avatarUrl?: string | null; role?: string } | null
 }
 
 export function MobileMenu({ items, user }: Props) {
@@ -63,20 +63,31 @@ export function MobileMenu({ items, user }: Props) {
             <div className="border-t border-gray-100 pt-2 mt-2">
               {user ? (
                 <>
+                  <div className="px-3 py-2 text-xs text-gray-400 font-medium truncate">
+                    {user.fullName ?? user.email}
+                  </div>
                   <Link
-                    href="/clenove"
+                    href="/clenove/profil"
                     onClick={() => setIsOpen(false)}
                     className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                   >
-                    Moje konto
+                    Profil
                   </Link>
+                  {(user.role === 'admin' || user.role === 'manager') && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsOpen(false)}
+                      className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+                    >
+                      Administrace
+                    </Link>
+                  )}
                   <form action="/logout" method="POST">
                     <button
                       type="submit"
-                      className="w-full text-left px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      className="w-full text-left px-3 py-2.5 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                     >
                       Odhlásit
-                      <span className="ml-1 text-xs text-gray-400">({user.email})</span>
                     </button>
                   </form>
                 </>

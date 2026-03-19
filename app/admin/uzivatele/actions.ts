@@ -72,10 +72,18 @@ export async function inviteUser(formData: FormData) {
   try {
     const admin = createAdminClient()
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-    const { error } = await admin.auth.admin.inviteUserByEmail(email, {
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${siteUrl}/callback`,
     })
     if (error) throw error
+
+    // Belt-and-suspenders: trigger handle_new_user() should already insert the profile,
+    // but upsert ensures the email is visible in admin even if trigger missed it.
+    if (data?.user) {
+      await admin
+        .from('user_profiles')
+        .upsert({ id: data.user.id, email }, { onConflict: 'id', ignoreDuplicates: true })
+    }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Chyba při odesílání pozvánky.'
     redirect(`/admin/uzivatele?error=${encodeURIComponent(msg)}`)

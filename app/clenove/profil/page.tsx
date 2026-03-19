@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { saveProfile } from '../actions'
 import ChangePasswordForm from './ChangePasswordForm'
+import AvatarUpload from './AvatarUpload'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Členská sekce – Profil' }
@@ -14,7 +15,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('email, full_name, phone, role, created_at')
+    .select('email, full_name, phone, role, avatar_url, created_at')
     .eq('id', user.id)
     .single()
 
@@ -30,6 +31,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
     <div className="max-w-lg">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Můj profil</h1>
 
+      {/* Avatar */}
+      <AvatarUpload
+        currentAvatarUrl={profile?.avatar_url}
+        fullName={profile?.full_name}
+        email={profile?.email ?? user.email ?? ''}
+      />
       {success && (
         <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
           ✓ Profil byl uložen.

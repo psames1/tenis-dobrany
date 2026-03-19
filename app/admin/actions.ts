@@ -46,6 +46,7 @@ export async function saveArticle(formData: FormData) {
   const isActive   = formData.get('is_active') === '1'
   const isMembersOnly = formData.get('is_members_only') === '1'
   const showInMenu = formData.get('show_in_menu') === '1'
+  const allowComments = formData.get('allow_comments') === '1'
   const sortOrder  = parseInt((formData.get('sort_order') as string | null) ?? '0', 10) || 0
   const publishedAt = (formData.get('published_at') as string | null) || new Date().toISOString()
 
@@ -70,6 +71,7 @@ export async function saveArticle(formData: FormData) {
         is_active: isActive,
         is_members_only: isMembersOnly,
         show_in_menu: showInMenu,
+        allow_comments: allowComments,
         sort_order: sortOrder,
         published_at: publishedAt,
         updated_at: new Date().toISOString(),
@@ -94,6 +96,7 @@ export async function saveArticle(formData: FormData) {
         is_active: isActive,
         is_members_only: isMembersOnly,
         show_in_menu: showInMenu,
+        allow_comments: allowComments,
         sort_order: sortOrder,
         published_at: publishedAt,
         created_by: user.id,
@@ -124,6 +127,30 @@ export async function saveArticle(formData: FormData) {
       }
     } catch {
       // Chyba galerie je nekritická — článek byl uložen
+    }
+  }
+
+  // ── Uložit přílohy (dokumenty) ────────────────────────────────────────────
+  const docsJson = formData.get('documents_json') as string | null
+  if (docsJson !== null) {
+    try {
+      type DocInput = { title: string; description: string; file_url: string }
+      const docs = JSON.parse(docsJson) as DocInput[]
+      await supabase.from('page_documents').delete().eq('page_id', targetId)
+      const validDocs = docs.filter(d => d.title?.trim() && d.file_url?.trim())
+      if (validDocs.length > 0) {
+        await supabase.from('page_documents').insert(
+          validDocs.map((d, i) => ({
+            page_id: targetId,
+            title: d.title.trim(),
+            description: d.description?.trim() || null,
+            file_url: d.file_url.trim(),
+            sort_order: i,
+          }))
+        )
+      }
+    } catch {
+      // Chyba příloh je nekritická — článek byl uložen
     }
   }
 

@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { saveArticle } from '../actions'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { createClient } from '@/lib/supabase/client'
-import { ImageIcon, ImagePlus, X } from 'lucide-react'
+import { ImageIcon, ImagePlus, X, FileUp, FilePlus, FileDown } from 'lucide-react'
 import { ArticleContributors, type ContributorRecord } from './ArticleContributors'
 
 type Section = { id: string; slug: string; title: string }
@@ -21,6 +21,7 @@ type Article = {
   is_members_only: boolean
   show_in_menu: boolean
   sort_order: number
+  allow_comments: boolean
   published_at: string
 }
 
@@ -31,6 +32,12 @@ type GalleryImage = {
   sort_order: number
 }
 
+type DocumentItem = {
+  title: string
+  description: string
+  file_url: string
+}
+
 type LocalGalleryImg = { url: string }
 
 type Props = {
@@ -38,6 +45,18 @@ type Props = {
   article?: Article
   galleryImages?: GalleryImage[]
   contributors?: ContributorRecord[]
+  savedDocuments?: DocumentItem[]
+}
+
+async function uploadDocumentFile(file: File): Promise<string> {
+  const supabase = createClient()
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `docs/${Date.now()}-${safeName}`
+  const { error } = await supabase.storage
+    .from('documents')
+    .upload(path, file, { cacheControl: '31536000', upsert: false })
+  if (error) throw new Error(error.message)
+  return supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
 }
 
 async function uploadGalleryImage(file: File): Promise<string> {
@@ -62,7 +81,7 @@ async function uploadCoverImage(file: File): Promise<string> {
   return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
 }
 
-export function ArticleForm({ sections, article, galleryImages, contributors }: Props) {
+export function ArticleForm({ sections, article, galleryImages, contributors, savedDocuments }: Props) {
   const isEdit = !!article
   const publishedDate = article?.published_at
     ? new Date(article.published_at).toISOString().slice(0, 16)
@@ -79,6 +98,31 @@ export function ArticleForm({ sections, article, galleryImages, contributors }: 
   const [galleryUploading, setGalleryUploading] = useState(false)
   const [galleryError, setGalleryError] = useState<string | null>(null)
   const galleryFileRef = useRef<HTMLInputElement>(null)
+
+  const [documents, setDocuments] = useState<DocumentItem[]>(savedDocuments ?? [])
+  const [docUploading, setDocUploading] = useState(false)
+  const [docError, setDocError] = useState<string | null>(null)
+  const docFileRef = useRef<HTMLInputElement>(null)
+
+  function updateDoc(index: number, field: keyof DocumentItem, value: string) {
+    setDocuments(prev => prev.map((d, i) => i === index ? { ...d, [field]: value } : d))
+  }
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setDocUploading(true)
+    setDocError(null)
+    try {
+      const url = await uploadDocumentFile(file)
+      setDocuments(prev => [...prev, { title: file.name.replace(/\.[^.]+$/, ''), description: '', file_url: url }])
+    } catch (err: unknown) {
+      setDocError(err instanceof Error ? err.message : 'Chyba při nahrávání souboru.')
+    } finally {
+      setDocUploading(false)
+      e.target.value = ''
+    }
+  }
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -236,7 +280,7 @@ export function ArticleForm({ sections, article, galleryImages, contributors }: 
         />
       </div>
 
-      {/* Fotogalerie */}
+      {/* Galerie */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="block text-sm font-medium text-gray-700">
@@ -308,6 +352,97 @@ export function ArticleForm({ sections, article, galleryImages, contributors }: 
         </p>
       </div>
 
+      {/* Přílohy (dokumenty) */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Přílohy (dokumenty ke stažení)
+          </label>
+          <div className="flex gap-2">
+            <input ref={docFileRef} type="file" className="hidden" onChange={handleDocUpload} />
+            <button
+              type="button"
+              onClick={() => docFileRef.current?.click()}
+              disabled={docUploading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <FileUp size={13} />
+              {docUploading ? 'Nahrávám…' : 'Nahrát soubor'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDocuments(prev => [...prev, { title: '', description: '', file_url: '' }])}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <FilePlus size={13} />
+              Přidat odkaz
+            </button>
+          </div>
+        </div>
+
+        <input
+          type="hidden"
+          name="documents_json"
+          value={JSON.stringify(documents)}
+        />
+
+        {docError && <p className="text-xs text-red-600 mb-2">{docError}</p>}
+
+        {documents.length === 0 ? (
+          <div className="py-5 text-center text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
+            Žádné přílohy. Nahrajte soubor nebo přidejte odkaz.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {documents.map((doc, i) => (
+              <div key={i} className="flex gap-2 items-start p-3 border border-gray-200 rounded-lg bg-gray-50">
+                <div className="flex-1 space-y-1.5 min-w-0">
+                  <input
+                    value={doc.title}
+                    onChange={e => updateDoc(i, 'title', e.target.value)}
+                    placeholder="Název přílohy *"
+                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                  />
+                  <input
+                    value={doc.description}
+                    onChange={e => updateDoc(i, 'description', e.target.value)}
+                    placeholder="Popis (volitelný)"
+                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={doc.file_url}
+                      onChange={e => updateDoc(i, 'file_url', e.target.value)}
+                      placeholder="URL souboru (https://…)"
+                      className="flex-1 min-w-0 px-2.5 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-green-500 bg-white font-mono"
+                    />
+                    {doc.file_url && (
+                      <a
+                        href={doc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-green-600 hover:text-green-800"
+                        title="Otevřít soubor"
+                      >
+                        <FileDown size={15} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDocuments(prev => prev.filter((_, idx) => idx !== i))}
+                  className="shrink-0 p-1 text-gray-400 hover:text-red-600 transition-colors"
+                  title="Odebrat přílohu"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Datum publikace */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="published_at">
@@ -354,6 +489,16 @@ export function ArticleForm({ sections, article, galleryImages, contributors }: 
               className="w-4 h-4 accent-green-600"
             />
             <span className="text-sm text-gray-700">Zobrazit v menu sekce</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="allow_comments"
+              value="1"
+              defaultChecked={article?.allow_comments ?? false}
+              className="w-4 h-4 accent-green-600"
+            />
+            <span className="text-sm text-gray-700">Povolit komentáře</span>
           </label>
         </div>
         <div className="flex items-center gap-3">

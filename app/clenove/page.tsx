@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Pencil } from 'lucide-react'
+import { Pencil, Settings } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Členská sekce – Přehled' }
@@ -12,16 +12,28 @@ export default async function MemberDashboard() {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('full_name, email')
+    .select('full_name, email, role')
     .eq('id', user.id)
     .single()
 
-  // Články, ke kterým je přihlášený uživatel spoluautorem
-  const { data: contributions } = await supabase
-    .from('article_contributors')
-    .select('page_id, pages(id, title, slug, is_active, published_at, sections(title, slug))')
-    .eq('user_id', user.id)
-    .order('invited_at', { ascending: false })
+  const role = profile?.role ?? 'member'
+  const isMember = role === 'member'
+  const isPrivileged = role === 'admin' || role === 'manager'
+
+  // Spoluautorství — zobrazit jen pro běžné členy (admin/editor vše edituje přes admin panel)
+  type ContributionRow = {
+    page_id: string
+    pages: unknown
+  }
+  let contributions: ContributionRow[] | null = null
+  if (isMember) {
+    const result = await supabase
+      .from('article_contributors')
+      .select('page_id, pages(id, title, slug, is_active, published_at, sections(title, slug))')
+      .eq('user_id', user.id)
+      .order('invited_at', { ascending: false })
+    contributions = result.data as ContributionRow[] | null
+  }
 
   const displayName = profile?.full_name ?? profile?.email ?? user.email ?? 'Ahoj'
 
@@ -37,46 +49,62 @@ export default async function MemberDashboard() {
         </p>
       </div>
 
-      {/* Moje příspěvky */}
-      <section>
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">Moje příspěvky</h2>
+      {/* Admin/Editor: odkaz na administraci */}
+      {isPrivileged && (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-800 mb-3">Správa webu</h2>
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors"
+          >
+            <Settings size={16} />
+            Přejít do administrace
+          </Link>
+        </section>
+      )}
 
-        {(!contributions || contributions.length === 0) ? (
-          <div className="py-10 text-center bg-white rounded-xl border border-gray-200">
-            <p className="text-sm text-gray-400">
-              Zatím nejste přiřazen k žádnému článku jako spoluautor.
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-            {contributions.map(c => {
-              const page = (c.pages as unknown) as { id: string; title: string; slug: string; is_active: boolean; published_at: string; sections: { title: string; slug: string } | null } | null
-              if (!page) return null
-              return (
-                <div key={c.page_id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="min-w-0">
-                    <div className="font-medium text-gray-900 truncate">{page.title}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {page.sections?.title ?? '—'} ·{' '}
-                      {new Date(page.published_at).toLocaleDateString('cs-CZ')}
-                      {!page.is_active && (
-                        <span className="ml-2 text-amber-600 font-medium">Skrytý</span>
-                      )}
+      {/* Moje příspěvky — jen pro členy */}
+      {isMember && (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-800 mb-3">Moje příspěvky</h2>
+
+          {(!contributions || contributions.length === 0) ? (
+            <div className="py-10 text-center bg-white rounded-xl border border-gray-200">
+              <p className="text-sm text-gray-400">
+                Zatím nejste přiřazen k žádnému článku jako spoluautor.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {contributions.map(c => {
+                const page = (c.pages as unknown) as { id: string; title: string; slug: string; is_active: boolean; published_at: string; sections: { title: string; slug: string } | null } | null
+                if (!page) return null
+                return (
+                  <div key={c.page_id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900 truncate">{page.title}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {page.sections?.title ?? '—'} ·{' '}
+                        {new Date(page.published_at).toLocaleDateString('cs-CZ')}
+                        {!page.is_active && (
+                          <span className="ml-2 text-amber-600 font-medium">Skrytý</span>
+                        )}
+                      </div>
                     </div>
+                    <Link
+                      href={`/clenove/clanky/${page.id}/upravit`}
+                      className="ml-4 shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                    >
+                      <Pencil size={13} />
+                      Upravit
+                    </Link>
                   </div>
-                  <Link
-                    href={`/clenove/clanky/${page.id}/upravit`}
-                    className="ml-4 shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    <Pencil size={13} />
-                    Upravit
-                  </Link>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Rychlé odkazy */}
       <section>
@@ -87,14 +115,7 @@ export default async function MemberDashboard() {
             className="p-4 bg-white rounded-xl border border-gray-200 hover:border-green-300 hover:shadow-sm transition-all"
           >
             <div className="font-semibold text-gray-900">Upravit profil</div>
-            <div className="text-xs text-gray-400 mt-1">Jméno, telefon</div>
-          </Link>
-          <Link
-            href="/clenove/dokumenty"
-            className="p-4 bg-white rounded-xl border border-gray-200 hover:border-green-300 hover:shadow-sm transition-all"
-          >
-            <div className="font-semibold text-gray-900">Dokumenty</div>
-            <div className="text-xs text-gray-400 mt-1">Stanovy, zápisy, formuláře</div>
+            <div className="text-xs text-gray-400 mt-1">Jméno, telefon, fotka</div>
           </Link>
         </div>
       </section>

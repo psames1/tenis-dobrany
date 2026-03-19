@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { User, FileText, BookOpen, LogOut } from 'lucide-react'
+import { User, BookOpen, Settings } from 'lucide-react'
 
 export default async function MemberLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -18,6 +18,7 @@ export default async function MemberLayout({ children }: { children: React.React
   if (!profile || !profile.is_active) redirect('/?error=account_inactive')
 
   const displayName = profile.full_name ?? profile.email ?? user.email ?? 'Člen'
+  const isPrivileged = profile.role === 'admin' || profile.role === 'manager'
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -47,22 +48,15 @@ export default async function MemberLayout({ children }: { children: React.React
                 <User size={14} />
                 Profil
               </Link>
-              <Link
-                href="/clenove/dokumenty"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
-              >
-                <FileText size={14} />
-                Dokumenty
-              </Link>
-              <form action="/logout" method="POST">
-                <button
-                  type="submit"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              {isPrivileged && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
                 >
-                  <LogOut size={14} />
-                  Odhlásit
-                </button>
-              </form>
+                  <Settings size={14} />
+                  Administrace
+                </Link>
+              )}
             </nav>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { MobileMenu } from './MobileMenu'
+import { AvatarMenu } from './AvatarMenu'
 import { ChevronDown } from 'lucide-react'
 
 export type NavItem = {
@@ -29,6 +30,17 @@ export async function Navigation() {
     supabase.auth.getUser(),
   ])
 
+  // Fetch profile for avatar + role-based links
+  let profile: { full_name: string | null; avatar_url: string | null; role: string } | null = null
+  if (user) {
+    const { data } = await supabase
+      .from('user_profiles')
+      .select('full_name, avatar_url, role')
+      .eq('id', user.id)
+      .single()
+    profile = data
+  }
+
   // Seskup stránky podle section_id
   const pagesBySection = new Map<string, { id: string; title: string; slug: string; section_id: string }[]>()
   for (const page of menuPages ?? []) {
@@ -55,7 +67,14 @@ export async function Navigation() {
       }
     })
 
-  const authUser = user ? { email: user.email ?? '' } : null
+  const authUser = user
+    ? {
+        email: user.email ?? '',
+        fullName: profile?.full_name ?? null,
+        avatarUrl: profile?.avatar_url ?? null,
+        role: profile?.role ?? 'member',
+      }
+    : null
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
@@ -115,25 +134,16 @@ export async function Navigation() {
             )}
           </div>
 
-          {/* Pravá strana: auth + mobilní menu */}
+          {/* Pravá strana: avatar/přihlášení + mobilní menu */}
           <div className="flex items-center gap-2">
-            {/* Desktop: přihlášení tlačítko */}
             {authUser ? (
-              <div className="hidden md:flex items-center gap-2">
-                <Link
-                  href="/clenove"
-                  className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors"
-                >
-                  Moje konto
-                </Link>
-                <form action="/logout" method="POST">
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:text-red-600 transition-colors"
-                  >
-                    Odhlásit
-                  </button>
-                </form>
+              <div className="hidden md:block">
+                <AvatarMenu
+                  email={authUser.email}
+                  fullName={authUser.fullName}
+                  avatarUrl={authUser.avatarUrl}
+                  role={authUser.role}
+                />
               </div>
             ) : (
               <Link

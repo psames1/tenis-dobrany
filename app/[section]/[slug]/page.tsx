@@ -3,6 +3,8 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ArticleGallery } from '@/components/gallery/ArticleGallery'
+import { CommentForm } from './CommentForm'
+import { Pencil, FileDown, MessageSquare } from 'lucide-react'
 
 type Props = {
   params: Promise<{ section: string; slug: string }>
@@ -62,7 +64,7 @@ export default async function ArticlePage({ params }: Props) {
 
   const { data: page } = await supabase
     .from('pages')
-    .select('id, slug, title, excerpt, content, image_url, is_members_only, published_at')
+    .select('id, slug, title, excerpt, content, image_url, is_members_only, allow_comments, published_at')
     .eq('section_id', section.id)
     .eq('slug', slug)
     .eq('is_active', true)
@@ -75,11 +77,55 @@ export default async function ArticlePage({ params }: Props) {
     redirect(`/login?redirectTo=/${sectionSlug}/${slug}`)
   }
 
-  const { data: galleryImages } = await supabase
-    .from('page_gallery')
-    .select('public_url, alt_text')
-    .eq('page_id', page.id)
-    .order('sort_order')
+  // Parallelní dotazy: galerie, role uživatele, dokumenty, komentáře
+  const [
+    { data: galleryImages },
+    { data: userProfile },
+    { data: documents },
+    { data: comments },
+  ] = await Promise.all([
+    supabase
+      .from('page_gallery')
+      .select('public_url, alt_text')
+      .eq('page_id', page.id)
+      .order('sort_order'),
+    user
+      ? supabase.from('user_profiles').select('role').eq('id', user.id).single()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('page_documents')
+      .select('id, title, description, file_url')
+      .eq('page_id', page.id)
+      .order('sort_order'),
+    page.allow_comments
+      ? supabase
+          .from('page_comments')
+          .select('id, content, created_at, user_profiles(full_name, email)')
+          .eq('page_id', page.id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: null }),
+  ])
+
+  // Je uživatel contributor tohoto článku?
+  const userRole = userProfile?.role ?? null
+  const isPrivileged = userRole === 'admin' || userRole === 'manager'
+  let isContributor = false
+  if (user && !isPrivileged) {
+    const { data: contrib } = await supabase
+      .from('article_contributors')
+      .select('id')
+      .eq('page_id', page.id)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    isContributor = !!contrib
+  }
+
+  const editHref = isPrivileged
+    ? `/admin/clanky/${page.id}/upravit`
+    : isContributor
+    ? `/clenove/clanky/${page.id}/upravit`
+    : null
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -95,11 +141,26 @@ export default async function ArticlePage({ params }: Props) {
       </nav>
 
       <article>
-        {page.is_members_only && (
-          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full mb-4">
-            Pouze pro členy
-          </span>
-        )}
+        {/* Badges + edit pencil */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex flex-wrap gap-2">
+            {page.is_members_only && (
+              <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                Pouze pro členy
+              </span>
+            )}
+          </div>
+          {editHref && (
+            <Link
+              href={editHref}
+              title="Upravit článek"
+              className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-amber-50 hover:text-amber-700 transition-colors"
+            >
+              <Pencil size={12} />
+              Upravit
+            </Link>
+          )}
+        </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 leading-tight mb-3">
           {page.title}
@@ -133,6 +194,101 @@ export default async function ArticlePage({ params }: Props) {
         <ArticleGallery
           images={(galleryImages ?? []).map(g => ({ url: g.public_url, alt: g.alt_text }))}
         />
+
+        {/* Přílohy (dokumenty) */}
+        {documents && documents.length > 0 && (
+          <div className="mt-10 pt-6 border-t border-gray-100">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800 mb-4">
+              <FileDown size={16} className="text-gray-400" />
+              Přílohy
+            </h2>
+            <div className="overflow-hidden rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {documents.map(doc => (
+                <div key={doc.id} className="flex items-start justify-between gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
+                  <div className="min-w-0">
+                    <div className="font-medium text-gray-900 text-sm">{doc.title}</div>
+                    {doc.description && (
+                      <div className="text-xs text-gray-500 mt-0.5">{doc.description}</div>
+                    )}
+                  </div>
+                  <a
+                    href={doc.file_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                  >
+                    <FileDown size={13} />
+                    Stáhnout
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Komentáře */}
+        {page.allow_comments && (
+          <div className="mt-10 pt-6 border-t border-gray-100">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800 mb-4">
+              <MessageSquare size={16} className="text-gray-400" />
+              Komentáře
+              {comments && comments.length > 0 && (
+                <span className="ml-1 text-xs font-normal text-gray-400">({comments.length})</span>
+              )}
+            </h2>
+
+            {(!comments || comments.length === 0) && (
+              <p className="text-sm text-gray-400 mb-6">Zatím žádné komentáře. Buďte první!</p>
+            )}
+
+            {comments && comments.length > 0 && (
+              <div className="space-y-4 mb-6">
+                {comments.map(c => {
+                  type AuthorRow = { full_name: string | null; email: string } | null
+                  const profileRaw = c.user_profiles
+                  const author: AuthorRow = Array.isArray(profileRaw)
+                    ? (profileRaw[0] as AuthorRow) ?? null
+                    : (profileRaw as AuthorRow)
+                  const name = author?.full_name ?? author?.email ?? 'Anonym'
+                  return (
+                    <div key={c.id} className="flex gap-3">
+                      <div className="shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 select-none uppercase">
+                        {name.slice(0, 2)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <span className="text-sm font-medium text-gray-900">{name}</span>
+                          <time className="text-xs text-gray-400">
+                            {new Date(c.created_at).toLocaleDateString('cs-CZ', {
+                              day: 'numeric', month: 'long', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })}
+                          </time>
+                        </div>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {user ? (
+              <CommentForm
+                pageId={page.id}
+                sectionSlug={sectionSlug}
+                articleSlug={slug}
+              />
+            ) : (
+              <p className="text-sm text-gray-500">
+                <Link href={`/login?redirectTo=/${sectionSlug}/${slug}`} className="text-green-600 font-medium hover:underline">
+                  Přihlaste se
+                </Link>{' '}
+                pro přidání komentáře.
+              </p>
+            )}
+          </div>
+        )}
       </article>
 
       <div className="mt-12 pt-6 border-t border-gray-100">
