@@ -56,7 +56,7 @@ COMMENT ON COLUMN public.page_documents.document_date IS
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('documents', 'documents', true, 10485760)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 10485760;
 
 -- ---------------------------------------------------------------------------
 -- 4. Storage RLS — documents (DROP + CREATE pro idempotenci)
@@ -64,6 +64,7 @@ ON CONFLICT (id) DO NOTHING;
 
 DROP POLICY IF EXISTS "documents: public read"    ON storage.objects;
 DROP POLICY IF EXISTS "documents: manager upload" ON storage.objects;
+DROP POLICY IF EXISTS "documents: manager update" ON storage.objects;
 DROP POLICY IF EXISTS "documents: manager delete" ON storage.objects;
 
 CREATE POLICY "documents: public read"

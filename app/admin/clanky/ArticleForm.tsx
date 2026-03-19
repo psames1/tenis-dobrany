@@ -38,6 +38,7 @@ type DocumentItem = {
   description: string
   file_url: string
   document_date: string  // YYYY-MM-DD
+  display_url?: string   // podepsaná URL pro zobrazení/stažení (není ukládána do DB)
 }
 
 type LocalGalleryImg = { url: string }
@@ -422,7 +423,9 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
           </div>
         </div>
 
-        <input type="hidden" name="documents_json" value={JSON.stringify(documents)} />
+        <input type="hidden" name="documents_json" value={JSON.stringify(
+          documents.map(({ display_url: _omit, ...d }) => d)
+        )} />
 
         {docError && <p className="text-xs text-red-600 mb-2">{docError}</p>}
 
@@ -472,7 +475,7 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
                       <div className="flex items-center justify-end gap-1">
                         {doc.file_url && (
                           <a
-                            href={doc.file_url}
+                            href={doc.display_url ?? doc.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1.5 text-green-600 hover:text-green-800 transition-colors"

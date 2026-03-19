@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -132,6 +133,26 @@ export default async function ArticlePage({ params }: Props) {
     isContributor = !!contrib
   }
 
+  // Generuj podepsané URL pro stahování dokumentů (bucket je privátní)
+  function extractDocPath(url: string): string | null {
+    try {
+      const u = new URL(url)
+      const prefix = '/storage/v1/object/public/documents/'
+      if (u.pathname.startsWith(prefix)) return decodeURIComponent(u.pathname.slice(prefix.length))
+    } catch { /* neignoruj URL která nejsou z Supabase storage */ }
+    return null
+  }
+
+  const adminStorage = createAdminClient().storage
+  const docsWithUrls = await Promise.all(
+    (documents ?? []).map(async (doc) => {
+      const path = extractDocPath(doc.file_url)
+      if (!path) return { ...doc, download_url: doc.file_url }
+      const { data } = await adminStorage.from('documents').createSignedUrl(path, 3600)
+      return { ...doc, download_url: data?.signedUrl ?? doc.file_url }
+    })
+  )
+
   const editHref = isPrivileged
     ? `/admin/clanky/${page.id}/upravit`
     : isContributor
@@ -209,14 +230,14 @@ export default async function ArticlePage({ params }: Props) {
         />
 
         {/* Přílohy (dokumenty) */}
-        {documents && documents.length > 0 && (
+        {docsWithUrls.length > 0 && (
           <div className="mt-10 pt-6 border-t border-gray-100">
             <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800 mb-4">
               <FileDown size={16} className="text-gray-400" />
               Přílohy
             </h2>
             <div className="overflow-hidden rounded-xl border border-gray-200 divide-y divide-gray-100">
-              {documents.map(doc => (
+              {docsWithUrls.map(doc => (
                 <div key={doc.id} className="flex items-start justify-between gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
                   <div className="min-w-0">
                     <div className="font-medium text-gray-900 text-sm">{doc.title}</div>
@@ -230,7 +251,7 @@ export default async function ArticlePage({ params }: Props) {
                     )}
                   </div>
                   <a
-                    href={doc.file_url}
+                    href={doc.download_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"

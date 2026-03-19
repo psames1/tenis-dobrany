@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import { ArticleForm } from '../../ArticleForm'
 import Link from 'next/link'
@@ -45,6 +46,26 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
 
   if (!article) notFound()
 
+  // Vygeneruj signed URL pro FileDown tlačítka v administraci
+  function extractDocPath(url: string): string | null {
+    try {
+      const u = new URL(url)
+      const prefix = '/storage/v1/object/public/documents/'
+      if (u.pathname.startsWith(prefix)) return decodeURIComponent(u.pathname.slice(prefix.length))
+    } catch { /* není Supabase storage URL */ }
+    return null
+  }
+
+  const adminStorage = createAdminClient().storage
+  const docsWithSignedUrls = await Promise.all(
+    (savedDocuments ?? []).map(async (doc) => {
+      const path = extractDocPath(doc.file_url)
+      if (!path) return { ...doc, display_url: doc.file_url }
+      const { data } = await adminStorage.from('documents').createSignedUrl(path, 3600)
+      return { ...doc, display_url: data?.signedUrl ?? doc.file_url }
+    })
+  )
+
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-6">
@@ -68,7 +89,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
         </div>
       )}
 
-      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} savedDocuments={(savedDocuments ?? []) as { title: string; description: string; file_url: string; document_date: string }[]} />
+      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} savedDocuments={docsWithSignedUrls as { title: string; description: string; file_url: string; document_date: string; display_url?: string }[]} />
     </div>
   )
 }
