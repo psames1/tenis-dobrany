@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { saveSection } from '../actions'
+import { saveSection, createSection, deleteSection } from '../actions'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Admin – Sekce' }
@@ -19,10 +19,32 @@ export default async function AdminSekce({
 
   return (
     <div>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Sekce webu</h2>
-        <p className="text-gray-500 text-sm mt-1">Správa navigačních sekcí a jejich nastavení.</p>
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Sekce webu</h2>
+          <p className="text-gray-500 text-sm mt-1">Správa navigačních sekcí a jejich nastavení.</p>
+        </div>
       </div>
+
+      {/* Formulář pro novou sekci */}
+      <form action={createSection} className="mb-6 flex items-end gap-3">
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Nová sekce</label>
+          <input
+            name="title"
+            type="text"
+            required
+            placeholder="Název nové sekce…"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+        >
+          + Přidat sekci
+        </button>
+      </form>
 
       {success && (
         <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
@@ -96,12 +118,24 @@ export default async function AdminSekce({
                   </label>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 flex items-center gap-3">
                   <button type="submit"
                     className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors">
                     Uložit sekci
                   </button>
                 </div>
+              </form>
+
+              {/* Smazání sekce — nezávislý formulář */}
+              <form action={deleteSection} className="mt-3 pt-3 border-t border-gray-100">
+                <input type="hidden" name="id" value={section.id} />
+                <button
+                  type="submit"
+
+                  className="text-xs text-red-500 hover:text-red-700 transition-colors"
+                >
+                  Smazat sekci
+                </button>
               </form>
             </div>
           </details>

@@ -225,3 +225,182 @@ export async function saveSection(formData: FormData) {
   }
   redirect('/admin/sekce?success=1')
 }
+
+// ─── Vytvořit novou sekci ────────────────────────────────────────────────────
+
+export async function createSection(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const title = (formData.get('title') as string).trim()
+  if (!title) redirect('/admin/sekce?error=missing_title')
+
+  const slug = toSlug(title)
+  const { error } = await supabase.from('sections').insert({ title, slug })
+
+  if (error) {
+    redirect(`/admin/sekce?error=${encodeURIComponent(error.message)}`)
+  }
+  redirect('/admin/sekce?success=1')
+}
+
+// ─── Smazat sekci ────────────────────────────────────────────────────────────
+
+export async function deleteSection(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const id = formData.get('id') as string
+  if (!id) redirect('/admin/sekce')
+
+  // Ověření, že sekce nemá články
+  const { count } = await supabase
+    .from('pages')
+    .select('id', { count: 'exact', head: true })
+    .eq('section_id', id)
+
+  if (count && count > 0) {
+    redirect(`/admin/sekce?error=${encodeURIComponent('Sekci nelze smazat — obsahuje ' + count + ' článků. Nejprve přesuňte nebo smažte články.')}`)
+  }
+
+  await supabase.from('sections').delete().eq('id', id)
+  redirect('/admin/sekce?success=1')
+}
+
+// ─── Design: uložit page_component ──────────────────────────────────────────
+
+export async function savePageComponent(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const id = formData.get('id') as string
+  const title = (formData.get('title') as string | null)?.trim() || null
+  const subtitle = (formData.get('subtitle') as string | null)?.trim() || null
+  const content = (formData.get('content') as string | null)?.trim() || null
+  const sortOrder = parseInt(formData.get('sort_order') as string, 10) || 0
+  const isActive = formData.get('is_active') === '1'
+
+  // JSON data (pokud je vyplněno)
+  let data: Record<string, unknown> = {}
+  const dataRaw = (formData.get('data_json') as string | null)?.trim()
+  if (dataRaw) {
+    try { data = JSON.parse(dataRaw) } catch { /* ponechat {} */ }
+  }
+
+  const { error } = await supabase
+    .from('page_components')
+    .update({ title, subtitle, content, data, sort_order: sortOrder, is_active: isActive })
+    .eq('id', id)
+
+  if (error) {
+    redirect(`/admin/design?tab=components&error=${encodeURIComponent(error.message)}`)
+  }
+  redirect('/admin/design?tab=components&success=1')
+}
+
+// ─── Design: uložit footer_content položku ──────────────────────────────────
+
+export async function saveFooterItem(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const id = formData.get('id') as string
+  const content = (formData.get('content') as string | null)?.trim() || null
+  const isActive = formData.get('is_active') === '1'
+
+  let data: unknown = null
+  const dataRaw = (formData.get('data_json') as string | null)?.trim()
+  if (dataRaw) {
+    try { data = JSON.parse(dataRaw) } catch { /* ponechat null */ }
+  }
+
+  const { error } = await supabase
+    .from('footer_content')
+    .update({ content, data, is_active: isActive })
+    .eq('id', id)
+
+  if (error) {
+    redirect(`/admin/design?tab=footer&error=${encodeURIComponent(error.message)}`)
+  }
+  redirect('/admin/design?tab=footer&success=1')
+}
+
+// ─── Design: uložit site_setting ────────────────────────────────────────────
+
+export async function saveSiteSetting(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const key = formData.get('key') as string
+  const value = (formData.get('value') as string)?.trim() ?? ''
+
+  const { error } = await supabase
+    .from('site_settings')
+    .update({ value })
+    .eq('key', key)
+
+  if (error) {
+    redirect(`/admin/design?tab=settings&error=${encodeURIComponent(error.message)}`)
+  }
+  redirect('/admin/design?tab=settings&success=1')
+}

@@ -42,15 +42,25 @@ export default async function HomePage() {
   }
   const visibilities = visibilitiesForRole(role)
 
-  // Krok 3: nejnovější aktuality pro danou úroveň oprávnění
-  const { data: newsArticles } = await supabase
-    .from('pages')
-    .select('id, slug, title, excerpt, image_url, published_at, sections!inner(slug)')
-    .eq('is_active', true)
-    .eq('is_news', true)
-    .in('visibility', visibilities)
-    .order('published_at', { ascending: false })
-    .limit(3)
+  // Krok 3: nejnovější aktuality + články ze sekce "uvod" pro designové bloky
+  const [{ data: newsArticles }, { data: uvodArticles }] = await Promise.all([
+    supabase
+      .from('pages')
+      .select('id, slug, title, excerpt, image_url, published_at, sections!inner(slug)')
+      .eq('is_active', true)
+      .eq('is_news', true)
+      .in('visibility', visibilities)
+      .order('published_at', { ascending: false })
+      .limit(3),
+    supabase
+      .from('pages')
+      .select('id, slug, title, excerpt, content, image_url, sections!inner(slug)')
+      .eq('is_active', true)
+      .eq('sections.slug', 'uvod')
+      .eq('show_in_menu', true)
+      .in('visibility', visibilities)
+      .order('sort_order', { ascending: false }),
+  ])
 
   const all = components ?? []
   const banner   = all.find(c => c.component === 'text_banner')
@@ -162,6 +172,31 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* ── Bloky ze sekce Úvod (kontakt-mapa, další obsah) ──────── */}
+      {(uvodArticles ?? []).map(article => (
+        <section key={article.id} className="py-14 sm:py-20 odd:bg-gray-50">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            {article.title && (
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 text-center">{article.title}</h2>
+            )}
+            {article.content && (
+              <div
+                className="article-content text-gray-600 text-lg leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: article.content }}
+              />
+            )}
+            <div className="mt-4 text-center">
+              <Link
+                href={`/uvod/${article.slug}`}
+                className="text-sm text-green-600 font-medium hover:text-green-800 transition-colors"
+              >
+                Více informací →
+              </Link>
+            </div>
+          </div>
+        </section>
+      ))}
     </>
   )
 }
