@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ArticleGallery } from '@/components/gallery/ArticleGallery'
 import { CommentForm } from './CommentForm'
+import { CommentItem } from './CommentItem'
 import { Pencil, FileDown, MessageSquare } from 'lucide-react'
 
 type Props = {
@@ -113,7 +114,7 @@ export default async function ArticlePage({ params }: Props) {
     page.allow_comments
       ? supabase
           .from('page_comments')
-          .select('id, content, created_at, user_profiles(full_name, email)')
+          .select('id, content, created_at, user_id, user_profiles(full_name, email, avatar_url)')
           .eq('page_id', page.id)
           .eq('is_active', true)
           .order('created_at', { ascending: true })
@@ -268,33 +269,16 @@ export default async function ArticlePage({ params }: Props) {
 
             {comments && comments.length > 0 && (
               <div className="space-y-4 mb-6">
-                {comments.map(c => {
-                  type AuthorRow = { full_name: string | null; email: string } | null
-                  const profileRaw = c.user_profiles
-                  const author: AuthorRow = Array.isArray(profileRaw)
-                    ? (profileRaw[0] as AuthorRow) ?? null
-                    : (profileRaw as AuthorRow)
-                  const name = author?.full_name ?? author?.email ?? 'Anonym'
-                  return (
-                    <div key={c.id} className="flex gap-3">
-                      <div className="shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 select-none uppercase">
-                        {name.slice(0, 2)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span className="text-sm font-medium text-gray-900">{name}</span>
-                          <time className="text-xs text-gray-400">
-                            {new Date(c.created_at).toLocaleDateString('cs-CZ', {
-                              day: 'numeric', month: 'long', year: 'numeric',
-                              hour: '2-digit', minute: '2-digit',
-                            })}
-                          </time>
-                        </div>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{c.content}</p>
-                      </div>
-                    </div>
-                  )
-                })}
+                {comments.map(c => (
+                  <CommentItem
+                    key={c.id}
+                    comment={c as Parameters<typeof CommentItem>[0]['comment']}
+                    sectionSlug={sectionSlug}
+                    articleSlug={slug}
+                    userId={user?.id}
+                    isAdmin={isPrivileged}
+                  />
+                ))}
               </div>
             )}
 

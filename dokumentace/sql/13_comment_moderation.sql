@@ -1,0 +1,16 @@
+-- Migration 13: Allow users to delete their own comments
+-- (UPDATE is handled server-side via admin client with ownership check)
+-- NOTE: The existing DELETE policy already allows own-user deletion via RLS.
+-- This migration documents the comment moderation approach:
+--   - Users can delete their own comments (existing RLS policy)
+--   - Managers/Admins can delete any comment (existing RLS policy)
+--   - UPDATE (edit) is performed via admin client with server-side ownership check
+--     in actions.ts (updateComment / deleteComment), so no additional RLS needed.
+
+-- Verify existing policies are in place:
+-- SELECT policyname FROM pg_policies WHERE tablename = 'page_comments';
+-- Expected:
+--   "page_comments: select all active"     (SELECT)
+--   "page_comments: insert own"             (INSERT)
+--   "page_comments: delete own or manager"  (DELETE)
+--   "page_comments: update for manager"     (UPDATE)
