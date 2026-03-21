@@ -79,6 +79,16 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
           ✓ Pozvánka byla zrušena a účet smazán.
         </div>
       )}
+      {success === 'role_changed' && (
+        <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
+          ✓ Role uživatele byla změněna.
+        </div>
+      )}
+      {success === 'status_changed' && (
+        <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
+          ✓ Stav účtu byl změněn.
+        </div>
+      )}
       {error && (
         <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
           Chyba: {decodeURIComponent(error)}

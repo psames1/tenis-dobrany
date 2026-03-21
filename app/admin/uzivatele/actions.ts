@@ -24,7 +24,8 @@ async function requireAdmin() {
 // ─── Změnit roli uživatele ────────────────────────────────────────────────────
 
 export async function changeUserRole(formData: FormData) {
-  const supabase = await requireAdmin()
+  await requireAdmin()
+  const adminClient = createAdminClient()
   const userId = formData.get('user_id') as string
   const role   = formData.get('role') as string
 
@@ -32,31 +33,32 @@ export async function changeUserRole(formData: FormData) {
     redirect('/admin/uzivatele?error=invalid_role')
   }
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from('user_profiles')
     .update({ role })
     .eq('id', userId)
 
   if (error) redirect(`/admin/uzivatele?error=${encodeURIComponent(error.message)}`)
-  revalidatePath('/admin/uzivatele')
+  redirect('/admin/uzivatele?success=role_changed')
 }
 
 // ─── Deaktivovat / aktivovat účet ────────────────────────────────────────────
 
 export async function toggleUserActive(formData: FormData) {
-  const supabase = await requireAdmin()
+  await requireAdmin()
+  const adminClient = createAdminClient()
   const userId   = formData.get('user_id') as string
   const isActive = formData.get('is_active') === '1'
 
   if (!userId) redirect('/admin/uzivatele?error=missing_id')
 
-  const { error } = await supabase
+  const { error } = await adminClient
     .from('user_profiles')
     .update({ is_active: isActive })
     .eq('id', userId)
 
   if (error) redirect(`/admin/uzivatele?error=${encodeURIComponent(error.message)}`)
-  revalidatePath('/admin/uzivatele')
+  redirect('/admin/uzivatele?success=status_changed')
 }
 
 // ─── Pozvat nového uživatele emailem ─────────────────────────────────────────
