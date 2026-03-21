@@ -640,20 +640,38 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
         </div>
       )}
 
-      {/* Tlačítka */}
-      <div className="flex gap-3 pt-2">
-        <button
-          type="submit"
-          className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
-        >
-          {isEdit ? 'Uložit změny' : 'Vytvořit článek'}
-        </button>
-        <a
-          href="/admin/clanky"
-          className="px-5 py-2 bg-white border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          Zrušit
-        </a>
+      {/* Tlačítka + notifikace */}
+      <div className="border border-blue-100 bg-blue-50 rounded-xl p-4 space-y-3">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="send_notification"
+            value="1"
+            defaultChecked={false}
+            className="w-4 h-4 mt-0.5 accent-blue-600 shrink-0"
+          />
+          <div>
+            <span className="text-sm font-medium text-gray-800">Odeslat e-mailovou notifikaci členům</span>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Po uložení se odešle e-mail s náhledem článku a odkazem členům, kteří mohou tento článek zobrazit.
+            </p>
+          </div>
+        </label>
+
+        <div className="flex gap-3 pt-1">
+          <button
+            type="submit"
+            className="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            {isEdit ? 'Uložit změny' : 'Vytvořit článek'}
+          </button>
+          <a
+            href="/admin/clanky"
+            className="px-5 py-2 bg-white border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Zrušit
+          </a>
+        </div>
       </div>
     </form>
   )

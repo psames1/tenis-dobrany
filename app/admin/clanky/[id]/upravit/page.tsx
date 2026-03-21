@@ -10,10 +10,10 @@ type Props = { params: Promise<{ id: string }> }
 export const metadata: Metadata = { title: 'Admin – Upravit článek' }
 
 export default async function EditArticlePage({ params, searchParams }: Props & {
-  searchParams: Promise<{ success?: string; error?: string }>
+  searchParams: Promise<{ success?: string; error?: string; notified?: string }>
 }) {
   const { id } = await params
-  const { success, error } = await (searchParams as unknown as Promise<{ success?: string; error?: string }>)
+  const { success, error, notified } = await (searchParams as unknown as Promise<{ success?: string; error?: string; notified?: string }>)
   const supabase = await createClient()
 
   const [{ data: article }, { data: sections }, { data: galleryImages }, { data: contributors }, { data: savedDocuments }] = await Promise.all([
@@ -81,6 +81,11 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
       {success && (
         <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
           ✓ Článek byl uložen.
+          {notified && (
+            <span className="ml-2 text-green-600">
+              E-mailová notifikace odeslána {notified} členům.
+            </span>
+          )}
         </div>
       )}
       {error && (

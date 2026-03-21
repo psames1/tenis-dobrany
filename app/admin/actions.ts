@@ -1,6 +1,8 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail, buildArticleEmailHtml, stripHtml } from '@/lib/email'
 import { redirect } from 'next/navigation'
 
 // Převod názvu na URL-friendly slug (s podporou češtiny)
@@ -43,6 +45,7 @@ export async function saveArticle(formData: FormData) {
   const excerpt    = (formData.get('excerpt') as string | null)?.trim() || null
   const content    = (formData.get('content') as string | null)?.trim() || null
   const imageUrl   = (formData.get('image_url') as string | null)?.trim() || null
+  const sendNotification = formData.get('send_notification') === '1'
   const isActive   = formData.get('is_active') === '1'
   const isNews     = formData.get('is_news') === '1'
   const visibility = (formData.get('visibility') as string | null) || 'public'
@@ -161,7 +164,64 @@ export async function saveArticle(formData: FormData) {
     }
   }
 
-  redirect(`/admin/clanky/${targetId}/upravit?success=1`)
+  // ── Odeslat e-mailové notifikace ─────────────────────────────────────────
+  let notifiedCount = 0
+  if (sendNotification) {
+    try {
+      const adminClient = await createAdminClient()
+
+      // Zjistit slug článku a sekce
+      const { data: pageRow } = await adminClient
+        .from('pages')
+        .select('slug, sections!section_id ( slug )')
+        .eq('id', targetId)
+        .single()
+
+      const sectionSlug =
+        pageRow && !Array.isArray(pageRow.sections) && pageRow.sections
+          ? (pageRow.sections as { slug: string }).slug
+          : ''
+      const articleSlug = pageRow?.slug ?? ''
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://tenis-dobrany.cz'
+      const articleUrl = `${siteUrl}/${sectionSlug}/${articleSlug}`
+
+      // Určit příjemce podle viditelnosti článku
+      const adminQ = adminClient
+        .from('user_profiles')
+        .select('email')
+        .eq('is_active', true)
+        .not('email', 'is', null)
+
+      const { data: recipients } = visibility === 'admin'
+        ? await adminQ.eq('role', 'admin')
+        : visibility === 'editor'
+          ? await adminQ.in('role', ['manager', 'admin'])
+          : await adminQ.in('role', ['member', 'manager', 'admin'])
+
+      const emails = (recipients ?? []).map(r => r.email as string).filter(Boolean)
+
+      if (emails.length > 0) {
+        const isNewArticle = !id
+        const subject = isNewArticle ? `Nový článek: ${title}` : `Aktualizace článku: ${title}`
+        const previewText = excerpt ?? (content ? stripHtml(content) : null)
+        const html = buildArticleEmailHtml({
+          title,
+          excerpt: previewText,
+          imageUrl,
+          articleUrl,
+          isNew: isNewArticle,
+        })
+        const fromAddr = process.env.SMTP_FROM ?? 'noreply@tenis-dobrany.cz'
+        await sendEmail({ to: fromAddr, bcc: emails, subject, html })
+        notifiedCount = emails.length
+      }
+    } catch {
+      // Selhání notifikace je nekritické — článek byl uložen
+    }
+  }
+
+  const notifiedParam = notifiedCount > 0 ? `&notified=${notifiedCount}` : ''
+  redirect(`/admin/clanky/${targetId}/upravit?success=1${notifiedParam}`)
 }
 
 // ─── Smazat článek ───────────────────────────────────────────────────────────

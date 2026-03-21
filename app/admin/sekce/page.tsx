@@ -76,7 +76,6 @@ export default async function AdminSekce({
               <div className="flex items-center gap-2">
                 <Link
                   href={`/admin/clanky?section=${section.slug}`}
-                  onClick={e => e.stopPropagation()}
                   className="px-2.5 py-1 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-green-50 hover:text-green-700 transition-colors"
                 >
                   Články →

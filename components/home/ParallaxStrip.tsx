@@ -21,18 +21,21 @@ export function ParallaxStrip({ imageUrl, title, subtitle, minHeight = '300px' }
     const update = () => {
       const rect = el.getBoundingClientRect()
       const vh = window.innerHeight
-      // progress: 0 when element top enters at viewport bottom; 1 when element bottom exits at viewport top
+      // progress: 0 when element enters at viewport bottom; 1 when exits at viewport top
       const travel = vh + rect.height
       const progress = Math.max(0, Math.min(1, (vh - rect.top) / travel))
-      // Map progress [0→1] to bgY [30%→70%] — reveals top→bottom of image as you scroll
-      setBgY(30 + progress * 40)
+      // Map progress [0→1] to bgY [15%→85%] — wider range for more visible movement
+      setBgY(15 + progress * 70)
     }
     window.addEventListener('scroll', update, { passive: true })
     window.addEventListener('resize', update, { passive: true })
+    // iOS Safari fires touchmove separately from scroll in some cases
+    window.addEventListener('touchmove', update, { passive: true })
     update()
     return () => {
       window.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
+      window.removeEventListener('touchmove', update)
     }
   }, [])
 
