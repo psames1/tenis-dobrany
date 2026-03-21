@@ -16,7 +16,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Bold, Italic, Strikethrough, Heading2, Heading3, Heading4,
   List, ListOrdered, Quote, Minus, Table2, Image as ImageIcon,
-  Undo2, Redo2, Plus, Trash2, Link2, Link2Off,
+  Undo2, Redo2, Plus, Trash2, Link2, Link2Off, Code2,
 } from 'lucide-react'
 
 // ── Upload helper ─────────────────────────────────────────────────────────────
@@ -201,7 +201,7 @@ const ResizableImageExtension = ImageExt.extend({
         default: null,
         // Read from the img's own data-href attribute (stored there for reliable round-trip)
         parseHTML: el => el.getAttribute('data-href') ?? el.parentElement?.getAttribute('href') ?? null,
-        renderHTML: () => ({}), // included manually in the node renderHTML override below
+        renderHTML: attrs => attrs['data-href'] ? { 'data-href': attrs['data-href'] } : {},
       },
     }
   },
@@ -309,6 +309,10 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
   const [hoverCell, setHoverCell]       = useState<[number, number]>([0, 0])
   const [tableWithHeader, setTableWithHeader] = useState(false)
   const [tableStyle, setTableStyle]     = useState<'bordered' | 'plain'>('bordered')
+  const [htmlMode, setHtmlMode]         = useState(false)
+  const [htmlValue, setHtmlValue]       = useState<string>(defaultValue ?? '')
+  const htmlModeRef                     = useRef(false)
+  const htmlValueRef                    = useRef(defaultValue ?? '')
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -331,7 +335,7 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
     ],
     content: defaultValue ?? '',
     onUpdate({ editor }) {
-      if (hiddenRef.current) hiddenRef.current.value = editor.getHTML()
+      if (!htmlModeRef.current && hiddenRef.current) hiddenRef.current.value = editor.getHTML()
     },
     editorProps: {
       attributes: {
@@ -346,7 +350,9 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
     const form = hiddenRef.current?.closest('form')
     if (!form) return
     const sync = () => {
-      if (hiddenRef.current) hiddenRef.current.value = editor.getHTML()
+      if (hiddenRef.current) {
+        hiddenRef.current.value = htmlModeRef.current ? htmlValueRef.current : editor.getHTML()
+      }
     }
     form.addEventListener('submit', sync)
     return () => form.removeEventListener('submit', sync)
@@ -430,11 +436,30 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
     ? ((editor.getAttributes('table')['data-style'] ?? 'bordered') as string)
     : 'bordered'
 
+  const toggleHtmlMode = () => {
+    if (!htmlMode) {
+      // Visual → HTML
+      const html = editor.getHTML()
+      setHtmlValue(html)
+      htmlValueRef.current = html
+      if (hiddenRef.current) hiddenRef.current.value = html
+      htmlModeRef.current = true
+      setHtmlMode(true)
+    } else {
+      // HTML → Visual
+      htmlModeRef.current = false
+      editor.commands.setContent(htmlValue)
+      if (hiddenRef.current) hiddenRef.current.value = htmlValue
+      setHtmlMode(false)
+    }
+  }
+
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent">
 
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 bg-gray-50 border-b border-gray-200">
+      <div className="flex items-start gap-1 px-2 py-1.5 bg-gray-50 border-b border-gray-200">
+        <div className={`flex flex-wrap items-center gap-0.5 flex-1 min-w-0 ${htmlMode ? 'opacity-30 pointer-events-none select-none' : ''}`}>
 
         {/* Nadpisy */}
         <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
@@ -640,10 +665,32 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
           disabled={!editor.can().redo()} title="Znovu (Ctrl+Y)">
           <Redo2 size={16} />
         </Btn>
+        </div>{/* end editor buttons */}
+        <div className="flex items-center shrink-0 pl-1">
+          <Sep />
+          <Btn onClick={toggleHtmlMode} active={htmlMode} title={htmlMode ? 'Vizuální editor' : 'HTML kód'}>
+            <Code2 size={16} />
+          </Btn>
+        </div>
       </div>
 
-      {/* ── Editor obsah ─────────────────────────────────────────────────────── */}
-      <EditorContent editor={editor} />
+      {/* ── Editor obsah / HTML kód ──────────────────────────────────────────── */}
+      {htmlMode ? (
+        <textarea
+          value={htmlValue}
+          onChange={e => {
+            setHtmlValue(e.target.value)
+            htmlValueRef.current = e.target.value
+            if (hiddenRef.current) hiddenRef.current.value = e.target.value
+          }}
+          className={`w-full font-mono text-xs leading-relaxed px-4 py-3 focus:outline-none resize-y bg-gray-950 text-green-300 ${minHeight}`}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+        />
+      ) : (
+        <EditorContent editor={editor} />
+      )}
 
       {/* Sync hidden input pro Server Action FormData */}
       <input
