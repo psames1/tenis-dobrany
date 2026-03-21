@@ -100,16 +100,15 @@ export async function Footer() {
   const col = (key: string) => all.filter(i => i.column_key === key)
 
   const columns = [
-    col('contact'),
-    col('links'),
-    col('social'),
-    col('about'),
+    col('paticka_kontakt'),
+    col('paticka_odkazy'),
+    col('paticka_dobrany'),
   ]
 
   return (
     <footer className="bg-green-900 text-green-100">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {columns.map((colItems, ci) => (
             <div key={ci} className="space-y-2">
               {colItems.map(item => (

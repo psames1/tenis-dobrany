@@ -44,6 +44,7 @@ export async function saveArticle(formData: FormData) {
   const content    = (formData.get('content') as string | null)?.trim() || null
   const imageUrl   = (formData.get('image_url') as string | null)?.trim() || null
   const isActive   = formData.get('is_active') === '1'
+  const isNews     = formData.get('is_news') === '1'
   const visibility = (formData.get('visibility') as string | null) || 'public'
   const isMembersOnly = visibility !== 'public'    // odvozeno z visibility
   const showInMenu = formData.get('show_in_menu') === '1'
@@ -71,6 +72,7 @@ export async function saveArticle(formData: FormData) {
         image_url: imageUrl,
         is_active: isActive,
         is_members_only: isMembersOnly,
+        is_news: isNews,
         visibility,
         show_in_menu: showInMenu,
         allow_comments: allowComments,
@@ -97,6 +99,7 @@ export async function saveArticle(formData: FormData) {
         image_url: imageUrl,
         is_active: isActive,
         is_members_only: isMembersOnly,
+        is_news: isNews,
         visibility,
         show_in_menu: showInMenu,
         allow_comments: allowComments,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { saveArticle } from '../actions'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { createClient } from '@/lib/supabase/client'
@@ -19,6 +19,7 @@ type Article = {
   image_url: string | null
   is_active: boolean
   is_members_only: boolean
+  is_news: boolean
   show_in_menu: boolean
   sort_order: number
   allow_comments: boolean
@@ -98,6 +99,29 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
   const [coverUploading, setCoverUploading] = useState(false)
   const [coverError, setCoverError] = useState<string | null>(null)
   const coverFileRef = useRef<HTMLInputElement>(null)
+
+  // Vložení obrázku ze schránky (Ctrl+V) — sledujeme globálně
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = Array.from(e.clipboardData?.items ?? [])
+      const imageItem = items.find(i => i.type.startsWith('image/'))
+      if (!imageItem) return
+      const file = imageItem.getAsFile()
+      if (!file) return
+      setCoverUploading(true)
+      setCoverError(null)
+      try {
+        const url = await uploadCoverImage(file)
+        setCoverUrl(url)
+      } catch {
+        setCoverError('Nepodařilo se nahrát obrázek ze schránky.')
+      } finally {
+        setCoverUploading(false)
+      }
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [])
 
   const [gallery, setGallery] = useState<LocalGalleryImg[]>(
     (galleryImages ?? []).map(g => ({ url: g.public_url }))
@@ -297,10 +321,10 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
               type="text"
               value={coverUrl}
               onChange={(e) => setCoverUrl(e.target.value)}
-              placeholder="https://... nebo nahrajte soubor →"
+              placeholder="https://... nebo nahrajte soubor"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
-            <div>
+            <div className="flex items-center gap-3 flex-wrap">
               <input ref={coverFileRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
               <button
                 type="button"
@@ -311,7 +335,8 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
                 <ImageIcon size={13} />
                 {coverUploading ? 'Nahrávám…' : 'Nahrát ze souboru'}
               </button>
-              {coverError && <span className="ml-2 text-xs text-red-600">{coverError}</span>}
+              <span className="text-xs text-gray-400">nebo vložte ze schránky <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs border border-gray-200">Ctrl+V</kbd></span>
+              {coverError && <span className="text-xs text-red-600">{coverError}</span>}
             </div>
           </div>
         </div>
@@ -558,6 +583,16 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
               className="w-4 h-4 accent-green-600"
             />
             <span className="text-sm text-gray-700">Aktivní (zobrazit na webu)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="is_news"
+              value="1"
+              defaultChecked={article?.is_news ?? false}
+              className="w-4 h-4 accent-green-600"
+            />
+            <span className="text-sm text-gray-700">Aktualita (zobrazit na úvodní stránce)</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input

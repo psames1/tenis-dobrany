@@ -1,9 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { HeroBlock } from '@/components/blocks/HeroBlock'
-import { TextImageBlock } from '@/components/blocks/TextImageBlock'
-import { SectionCardsBlock } from '@/components/blocks/SectionCardsBlock'
-import { LatestArticlesBlock } from '@/components/blocks/LatestArticlesBlock'
-import { CtaButtonsBlock } from '@/components/blocks/CtaButtonsBlock'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -11,24 +7,20 @@ export const metadata: Metadata = {
   description: 'Tenisový oddíl TJ Dobřany, z.s. — Hrajeme tenis od roku 1964 v areálu Džungle v Dobřanech u Plzně.',
 }
 
-type PageComponent = {
-  id: string
-  component: string
-  title: string | null
-  subtitle: string | null
-  content: string | null
-  data: Record<string, unknown>
-}
-
 type Button = { label: string; url: string; variant: 'primary' | 'outline' }
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('cs-CZ', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+}
 
 export default async function HomePage() {
   const supabase = await createClient()
 
   const [
     { data: components },
-    { data: sections },
-    { data: articles },
+    { data: newsArticles },
   ] = await Promise.all([
     supabase
       .from('page_components')
@@ -37,89 +29,127 @@ export default async function HomePage() {
       .eq('is_active', true)
       .order('sort_order'),
 
-    supabase
-      .from('sections')
-      .select('id, slug, title, description')
-      .eq('is_active', true)
-      .eq('show_in_menu', true)
-      .order('menu_order'),
-
+    // Nejnovější 3 aktuality (is_news = true, ze všech sekcí)
     supabase
       .from('pages')
-      .select('id, slug, title, excerpt, image_url, published_at, section:sections!inner(slug)')
+      .select('id, slug, title, excerpt, image_url, published_at, sections!inner(slug)')
       .eq('is_active', true)
-      .eq('sections.slug', 'aktuality')
+      .eq('is_news', true)
+      .eq('visibility', 'public')
       .order('published_at', { ascending: false })
       .limit(3),
   ])
 
-  const blocks = (components ?? []) as PageComponent[]
+  const all = components ?? []
+  const banner   = all.find(c => c.component === 'text_banner')
+  const clubText = all.find(c => c.component === 'text_o_klubu')
+
+  const bannerButtons = (banner?.data as { buttons?: Button[] } | null)?.buttons ?? []
 
   return (
     <>
-      {blocks.map(block => {
-        switch (block.component) {
+      {/* ── Zelený banner pruh ───────────────────────────────────────── */}
+      <section className="bg-gradient-to-r from-green-700 to-green-600 text-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 text-center">
+          {banner?.title && (
+            <h2 className="text-xl sm:text-2xl font-bold mb-6">{banner.title}</h2>
+          )}
+          {bannerButtons.length > 0 && (
+            <div className="flex flex-wrap justify-center gap-4">
+              {bannerButtons.map((btn, i) =>
+                btn.variant === 'outline' ? (
+                  <Link
+                    key={i}
+                    href={btn.url}
+                    className="px-6 py-3 rounded-lg border-2 border-white text-white font-semibold hover:bg-white hover:text-green-700 transition-colors"
+                  >
+                    {btn.label}
+                  </Link>
+                ) : (
+                  <Link
+                    key={i}
+                    href={btn.url}
+                    className="px-6 py-3 rounded-lg bg-white text-green-700 font-semibold hover:bg-green-50 transition-colors shadow-md"
+                  >
+                    {btn.label}
+                  </Link>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      </section>
 
-          case 'hero':
-            return (
-              <HeroBlock
-                key={block.id}
-                title={block.title ?? ''}
-                subtitle={block.subtitle}
-                buttons={(block.data.buttons as Button[] | undefined) ?? []}
-              />
-            )
+      {/* ── Nejnovější aktuality ─────────────────────────────────────── */}
+      <section className="py-14 sm:py-20 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Aktuality</h2>
+            <Link
+              href="/aktuality"
+              className="text-sm text-green-600 font-medium hover:text-green-800 transition-colors whitespace-nowrap ml-4"
+            >
+              Všechny aktuality →
+            </Link>
+          </div>
 
-          case 'text_image': {
-            const d = block.data as { image_position?: 'left' | 'right'; icon?: string }
-            return (
-              <TextImageBlock
-                key={block.id}
-                title={block.title ?? ''}
-                content={block.content}
-                icon={d.icon}
-                imagePosition={d.image_position}
-              />
-            )
-          }
-
-          case 'section_cards':
-            return (
-              <SectionCardsBlock
-                key={block.id}
-                title={block.title}
-                subtitle={block.subtitle}
-                sections={sections ?? []}
-              />
-            )
-
-          case 'latest_articles': {
-            const d = block.data as { source_section?: string }
-            return (
-              <LatestArticlesBlock
-                key={block.id}
-                title={block.title}
+          {!newsArticles || newsArticles.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
+              <p className="text-gray-400">Zatím žádné aktuality.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {newsArticles.map(article => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                articles={(articles as any[]) ?? []}
-                sectionSlug={d.source_section ?? 'aktuality'}
-              />
-            )
-          }
+                const sec = Array.isArray(article.sections) ? (article.sections as any[])[0] : article.sections
+                const sectionSlug = sec?.slug ?? 'aktuality'
+                return (
+                  <Link
+                    key={article.id}
+                    href={`/${sectionSlug}/${article.slug}`}
+                    className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all"
+                  >
+                    <div className="bg-green-50 h-40 flex items-center justify-center text-5xl flex-shrink-0 overflow-hidden">
+                      {article.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={article.image_url} alt={article.title} className="w-full h-full object-cover" />
+                      ) : (
+                        '📰'
+                      )}
+                    </div>
+                    <div className="p-5 flex flex-col flex-1">
+                      <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
+                      <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-2">
+                        {article.title}
+                      </h3>
+                      {article.excerpt && (
+                        <p className="text-sm text-gray-500 line-clamp-3 flex-1">{article.excerpt}</p>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </section>
 
-          case 'cta_buttons':
-            return (
-              <CtaButtonsBlock
-                key={block.id}
-                title={block.title}
-                subtitle={block.subtitle}
-                buttons={(block.data.buttons as Button[] | undefined) ?? []}
+      {/* ── O klubu ──────────────────────────────────────────────────── */}
+      {clubText && (
+        <section className="py-14 sm:py-20">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            {clubText.title && (
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 text-center">{clubText.title}</h2>
+            )}
+            {clubText.content && (
+              <div
+                className="article-content text-gray-600 text-lg leading-relaxed text-center"
+                dangerouslySetInnerHTML={{ __html: clubText.content }}
               />
-            )
-
-          default:
-            return null
-        }
-      })}
+            )}
+          </div>
+        </section>
+      )}
     </>
   )
 }
