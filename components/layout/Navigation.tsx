@@ -15,7 +15,7 @@ export type NavItem = {
 export async function Navigation() {
   const supabase = await createClient()
 
-  const [{ data: sections }, { data: menuPages }, { data: { user } }] = await Promise.all([
+  const [{ data: sections }, { data: menuPages }, { data: { user } }, { data: headerComponents }] = await Promise.all([
     supabase
       .from('sections')
       .select('id, slug, title, menu_title, menu_url, menu_parent_id')
@@ -29,7 +29,17 @@ export async function Navigation() {
       .eq('show_in_menu', true)
       .order('sort_order', { ascending: false }),
     supabase.auth.getUser(),
+    supabase
+      .from('page_components')
+      .select('title')
+      .eq('page_key', 'home')
+      .eq('component', 'header')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle(),
   ])
+
+  const logoText = headerComponents?.title || 'TJ Dobřany'
 
   // Fetch profile for avatar + role-based links
   let profile: { full_name: string | null; avatar_url: string | null; role: string } | null = null
@@ -88,10 +98,11 @@ export async function Navigation() {
           {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2 text-green-700 font-bold text-lg hover:text-green-800 transition-colors flex-shrink-0"
+            className="flex items-center gap-2.5 text-green-700 font-bold text-lg hover:text-green-800 transition-colors flex-shrink-0"
           >
-            <span className="text-xl" aria-hidden="true">🎾</span>
-            <span>TJ Dobřany</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/tennis-racket.svg" alt="" className="w-7 h-7" aria-hidden="true" />
+            <span className="tracking-tight">{logoText}</span>
           </Link>
 
           {/* Desktopové menu */}

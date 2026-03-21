@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { visibilitiesForRole } from '@/lib/supabase/visibility'
+import { HeroCarousel } from '@/components/home/HeroCarousel'
+import { ParallaxStrip } from '@/components/home/ParallaxStrip'
 
 export const metadata: Metadata = {
   title: 'Tenisový oddíl TJ Dobřany',
@@ -9,6 +11,8 @@ export const metadata: Metadata = {
 }
 
 type Button = { label: string; url: string; variant: 'primary' | 'outline' }
+type HeroData = { buttons?: Button[]; images?: string[] }
+type ParallaxData = { image_url?: string }
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('cs-CZ', {
@@ -19,7 +23,7 @@ function formatDate(dateStr: string) {
 export default async function HomePage() {
   const supabase = await createClient()
 
-  // Krok 1: user + page_components paralelně (user z cookie, levné)
+  // Krok 1: user + page_components paralelně
   const [{ data: components }, { data: { user } }] = await Promise.all([
     supabase
       .from('page_components')
@@ -30,7 +34,7 @@ export default async function HomePage() {
     supabase.auth.getUser(),
   ])
 
-  // Krok 2: role uživatele (jen 1 DB dotaz pokud je přihlášen)
+  // Krok 2: role uživatele
   let role: string | null = null
   if (user) {
     const { data: up } = await supabase
@@ -42,7 +46,7 @@ export default async function HomePage() {
   }
   const visibilities = visibilitiesForRole(role)
 
-  // Krok 3: nejnovější aktuality + články ze sekce "uvod" pro designové bloky
+  // Krok 3: nejnovější aktuality + články ze sekce "uvod"
   const [{ data: newsArticles }, { data: uvodArticles }] = await Promise.all([
     supabase
       .from('pages')
@@ -63,44 +67,26 @@ export default async function HomePage() {
   ])
 
   const all = components ?? []
-  const banner   = all.find(c => c.component === 'text_banner')
-  const clubText = all.find(c => c.component === 'text_o_klubu')
+  const hero      = all.find(c => c.component === 'hero')
+  const clubText  = all.find(c => c.component === 'text_o_klubu')
+  const parallax  = all.find(c => c.component === 'parallax_strip')
 
-  const bannerButtons = (banner?.data as { buttons?: Button[] } | null)?.buttons ?? []
+  const heroData = (hero?.data as HeroData | null) ?? {}
+  const heroButtons = heroData.buttons ?? []
+  const heroImages = heroData.images ?? []
+  const parallaxData = (parallax?.data as ParallaxData | null) ?? {}
 
   return (
     <>
-      {/* ── Zelený banner pruh ───────────────────────────────────────── */}
-      <section className="bg-gradient-to-r from-green-700 to-green-600 text-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 text-center">
-          {banner?.title && (
-            <h2 className="text-xl sm:text-2xl font-bold mb-6">{banner.title}</h2>
-          )}
-          {bannerButtons.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-4">
-              {bannerButtons.map((btn, i) =>
-                btn.variant === 'outline' ? (
-                  <Link
-                    key={i}
-                    href={btn.url}
-                    className="px-6 py-3 rounded-lg border-2 border-white text-white font-semibold hover:bg-white hover:text-green-700 transition-colors"
-                  >
-                    {btn.label}
-                  </Link>
-                ) : (
-                  <Link
-                    key={i}
-                    href={btn.url}
-                    className="px-6 py-3 rounded-lg bg-white text-green-700 font-semibold hover:bg-green-50 transition-colors shadow-md"
-                  >
-                    {btn.label}
-                  </Link>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      </section>
+      {/* ── Hero sekce s karuselem fotek ─────────────────────────────── */}
+      {hero && (
+        <HeroCarousel
+          title={hero.title}
+          subtitle={hero.subtitle}
+          buttons={heroButtons}
+          images={heroImages}
+        />
+      )}
 
       {/* ── Nejnovější aktuality ─────────────────────────────────────── */}
       <section className="py-14 sm:py-20 bg-gray-50">
@@ -173,9 +159,18 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* ── Parallax prosvítající pruh ───────────────────────────────── */}
+      {parallax && parallaxData.image_url && (
+        <ParallaxStrip
+          imageUrl={parallaxData.image_url}
+          title={parallax.title}
+          subtitle={parallax.subtitle}
+        />
+      )}
+
       {/* ── Bloky ze sekce Úvod (kontakt-mapa, další obsah) ──────── */}
       {(uvodArticles ?? []).map(article => (
-        <section key={article.id} className="py-14 sm:py-20 odd:bg-gray-50">
+        <section key={article.id} className="py-14 sm:py-20 even:bg-gray-50">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             {article.title && (
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 text-center">{article.title}</h2>
@@ -186,14 +181,6 @@ export default async function HomePage() {
                 dangerouslySetInnerHTML={{ __html: article.content }}
               />
             )}
-            <div className="mt-4 text-center">
-              <Link
-                href={`/uvod/${article.slug}`}
-                className="text-sm text-green-600 font-medium hover:text-green-800 transition-colors"
-              >
-                Více informací →
-              </Link>
-            </div>
           </div>
         </section>
       ))}

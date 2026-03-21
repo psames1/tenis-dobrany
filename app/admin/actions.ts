@@ -404,3 +404,78 @@ export async function saveSiteSetting(formData: FormData) {
   }
   redirect('/admin/design?tab=settings&success=1')
 }
+
+// ─── Design: vytvořit nový page_component ───────────────────────────────────
+
+export async function createPageComponent(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const pageKey = (formData.get('page_key') as string)?.trim() || 'home'
+  const component = (formData.get('component') as string)?.trim()
+  const title = (formData.get('title') as string | null)?.trim() || null
+
+  if (!component) {
+    redirect('/admin/design?tab=components&error=missing_component_type')
+  }
+
+  // Zjisti nejvyšší sort_order
+  const { data: last } = await supabase
+    .from('page_components')
+    .select('sort_order')
+    .eq('page_key', pageKey)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single()
+
+  const sortOrder = (last?.sort_order ?? 0) + 10
+
+  const { error } = await supabase
+    .from('page_components')
+    .insert({ page_key: pageKey, component, title, sort_order: sortOrder, is_active: false })
+
+  if (error) {
+    redirect(`/admin/design?tab=components&error=${encodeURIComponent(error.message)}`)
+  }
+  redirect('/admin/design?tab=components&success=1')
+}
+
+// ─── Design: smazat page_component ──────────────────────────────────────────
+
+export async function deletePageComponent(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !['admin', 'manager'].includes(profile.role)) {
+    redirect('/?error=forbidden')
+  }
+
+  const id = formData.get('id') as string
+  if (!id) redirect('/admin/design?tab=components')
+
+  const { error } = await supabase.from('page_components').delete().eq('id', id)
+  if (error) {
+    redirect(`/admin/design?tab=components&error=${encodeURIComponent(error.message)}`)
+  }
+  redirect('/admin/design?tab=components&success=1')
+}

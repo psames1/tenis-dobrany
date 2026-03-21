@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Handle -->
+  <rect x="8" y="44" width="6" height="16" rx="2" transform="rotate(-45 8 44)" fill="#15803d" />
+  <rect x="11" y="41" width="6" height="4" rx="1" transform="rotate(-45 11 41)" fill="#166534" />
+  <!-- Head -->
+  <ellipse cx="36" cy="20" rx="16" ry="20" transform="rotate(-45 36 20)" stroke="#15803d" stroke-width="3" fill="none" />
+  <!-- Strings horizontal -->
+  <line x1="25" y1="12" x2="47" y2="12" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line x1="23" y1="17" x2="49" y2="17" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line x1="23" y1="22" x2="49" y2="22" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line x1="25" y1="27" x2="47" y2="27" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <!-- Strings vertical -->
+  <line x1="31" y1="3" x2="31" y2="37" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line x1="36" y1="1" x2="36" y2="39" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line x1="41" y1="3" x2="41" y2="37" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <!-- Ball -->
+  <circle cx="52" cy="10" r="5" fill="#eab308" />
+  <path d="M49 7c2 2 2 4 0 6" stroke="#facc15" stroke-width="1" fill="none" />
+  <path d="M55 7c-2 2-2 4 0 6" stroke="#facc15" stroke-width="1" fill="none" />
+</svg>

@@ -1,17 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
-import { savePageComponent, saveFooterItem, saveSiteSetting } from '../actions'
+import { savePageComponent, saveFooterItem, saveSiteSetting, createPageComponent, deletePageComponent } from '../actions'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { DesignContentEditor } from './DesignContentEditor'
 
 export const metadata: Metadata = { title: 'Admin – Design' }
 
 // Popisy komponent pro uživatele
 const componentDescriptions: Record<string, string> = {
-  text_banner: '🟢 Zelený banner – pruh pod hlavním menu na úvodní stránce. Obsahuje nadpis a tlačítka (JSON data).',
-  text_o_klubu: '📝 O klubu – textový blok pod aktualitami na úvodní stránce. TIP: obsah lze spravovat i jako článek v sekci „Úvod".',
-  hero: '🖼️ Hero – velký úvodní blok s obrázkem na pozadí (nepoužíváme).',
-  text_image: '🖼️ Text + obrázek – blok s textem a volitelným obrázkem (nepoužíváme).',
-  section_cards: '🗂️ Karty sekcí – mřížka sekcí webu (nepoužíváme).',
+  header: '🏠 Hlavička – text vlevo nahoře v navigaci (logo text). V poli Nadpis zadejte název webu.',
+  hero: '🖼️ Hero – velký úvodní blok s fotkami na pozadí a poloprůhledným oknem. Fotky se střídají jako karusel.',
+  text_o_klubu: '📝 O klubu – textový blok pod aktualitami. HTML obsah.',
+  parallax_strip: '🌄 Parallax pruh – prosvítající obrázek s efektem při scrollování. Nastavte obrázek v JSON data.',
+  text_banner: '🟢 Zelený banner – starší pruh (nahrazeno Hero sekcí).',
+  text_image: '🖼️ Text + obrázek – blok s textem a volitelným obrázkem.',
+  section_cards: '🗂️ Karty sekcí – mřížka sekcí webu.',
   latest_articles: '📰 Poslední články – blok nejnovějších článků.',
   cta_buttons: '🔘 CTA tlačítka – výzva k akci s tlačítky.',
 }
@@ -30,7 +33,16 @@ const settingDescriptions: Record<string, string> = {
   contact_address: 'Adresa tenisového areálu',
 }
 
-type Tab = 'components' | 'footer' | 'settings' | 'help'
+// Vizuální rozvržení domovské stránky
+const LAYOUT_ORDER = [
+  { component: 'hero', label: 'Hero (fotky + overlay)', icon: '🖼️' },
+  { component: '__aktuality__', label: 'Aktuality (automaticky)', icon: '📰' },
+  { component: 'text_o_klubu', label: 'O klubu (text)', icon: '📝' },
+  { component: 'parallax_strip', label: 'Parallax pruh', icon: '🌄' },
+  { component: '__uvod_articles__', label: 'Bloky ze sekce Úvod', icon: '📄' },
+]
+
+type Tab = 'layout' | 'components' | 'footer' | 'settings' | 'help'
 
 export default async function DesignPage({
   searchParams,
@@ -38,7 +50,7 @@ export default async function DesignPage({
   searchParams: Promise<{ tab?: string; success?: string; error?: string }>
 }) {
   const { tab: rawTab, success, error } = await searchParams
-  const tab: Tab = (['components', 'footer', 'settings', 'help'].includes(rawTab ?? '') ? rawTab : 'components') as Tab
+  const tab: Tab = (['layout', 'components', 'footer', 'settings', 'help'].includes(rawTab ?? '') ? rawTab : 'layout') as Tab
 
   const supabase = await createClient()
 
@@ -60,11 +72,14 @@ export default async function DesignPage({
   ])
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'components', label: 'Úvodní stránka' },
+    { key: 'layout', label: 'Rozvržení' },
+    { key: 'components', label: 'Komponenty' },
     { key: 'footer', label: 'Patička' },
     { key: 'settings', label: 'Nastavení' },
     { key: 'help', label: 'Nápověda' },
   ]
+
+  const homeComponents = (pageComponents ?? []).filter(c => c.page_key === 'home')
 
   return (
     <div>
@@ -85,12 +100,12 @@ export default async function DesignPage({
       )}
 
       {/* Záložky */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
+      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
         {tabs.map(t => (
           <Link
             key={t.key}
             href={`/admin/design?tab=${t.key}`}
-            className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
+            className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
               tab === t.key
                 ? 'bg-white border border-b-white border-gray-200 text-green-700 -mb-px'
                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -101,13 +116,124 @@ export default async function DesignPage({
         ))}
       </div>
 
+      {/* ── Záložka: Rozvržení (vizuální přehled) ──────────────────── */}
+      {tab === 'layout' && (
+        <div className="space-y-6">
+          <p className="text-sm text-gray-500">
+            Přehledové rozvržení úvodní stránky shora dolů. Zeleně = aktivní, šedě = neaktivní.
+            Pro editaci detailů přejděte na záložku <strong>Komponenty</strong>.
+          </p>
+
+          <div className="max-w-2xl mx-auto">
+            {/* Hlavička */}
+            <div className="border-2 border-green-300 bg-green-50 rounded-t-xl p-4 flex items-center gap-3">
+              <span className="text-xl">🏠</span>
+              <div>
+                <div className="font-semibold text-gray-900 text-sm">Hlavička (navigace)</div>
+                <div className="text-xs text-gray-500">
+                  Logo: {homeComponents.find(c => c.component === 'header')?.title || 'TJ Dobřany'} — vždy zobrazena
+                </div>
+              </div>
+            </div>
+
+            {/* Bloky stránky */}
+            {LAYOUT_ORDER.map(item => {
+              const pc = homeComponents.find(c => c.component === item.component)
+              const isSpecial = item.component.startsWith('__')
+              const isActive = isSpecial || pc?.is_active
+
+              return (
+                <div
+                  key={item.component}
+                  className={`border-x-2 border-b-2 p-4 flex items-center justify-between ${
+                    isActive
+                      ? 'border-green-300 bg-green-50/50'
+                      : 'border-gray-200 bg-gray-50 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{item.icon}</span>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">{item.label}</div>
+                      <div className="text-xs text-gray-500">
+                        {isSpecial
+                          ? 'Automaticky generováno z článků'
+                          : pc
+                            ? `sort: ${pc.sort_order} | ${pc.is_active ? '✅ aktivní' : '❌ neaktivní'}`
+                            : '⚠️ Neexistuje v DB – přidejte v záložce Komponenty'
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  {!isSpecial && pc && (
+                    <Link
+                      href="/admin/design?tab=components"
+                      className="text-xs text-green-600 hover:text-green-800 font-medium"
+                    >
+                      Upravit →
+                    </Link>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Patička */}
+            <div className="border-x-2 border-b-2 border-green-300 bg-green-50 rounded-b-xl p-4 flex items-center gap-3">
+              <span className="text-xl">🦶</span>
+              <div>
+                <div className="font-semibold text-gray-900 text-sm">Patička</div>
+                <div className="text-xs text-gray-500">3 sloupce — upravit v záložce Patička</div>
+              </div>
+              <Link
+                href="/admin/design?tab=footer"
+                className="ml-auto text-xs text-green-600 hover:text-green-800 font-medium"
+              >
+                Upravit →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Záložka: Komponenty úvodní stránky ─────────────────────── */}
       {tab === 'components' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-gray-500 mb-2">
             Komponenty sestavující úvodní stránku. Každá má nadpis, obsah a volitelná JSON data.
             Pořadí určuje <code className="text-xs bg-gray-100 px-1 rounded">sort_order</code> (nižší = výše).
           </p>
+
+          {/* Formulář pro přidání nové komponenty */}
+          <details className="bg-blue-50 rounded-xl border border-blue-200 shadow-sm">
+            <summary className="flex items-center gap-2 px-5 py-3 cursor-pointer select-none list-none text-sm font-medium text-blue-700">
+              <span className="text-lg">➕</span> Přidat novou komponentu
+            </summary>
+            <div className="border-t border-blue-200 px-5 py-4">
+              <form action={createPageComponent} className="flex flex-wrap gap-3 items-end">
+                <input type="hidden" name="page_key" value="home" />
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Typ komponenty</label>
+                  <select name="component" required className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option value="">— Vyberte —</option>
+                    <option value="header">header (Hlavička)</option>
+                    <option value="hero">hero (Hero banner)</option>
+                    <option value="text_o_klubu">text_o_klubu (O klubu)</option>
+                    <option value="parallax_strip">parallax_strip (Parallax pruh)</option>
+                    <option value="text_banner">text_banner (Zelený banner)</option>
+                    <option value="text_image">text_image (Text + obrázek)</option>
+                    <option value="cta_buttons">cta_buttons (CTA tlačítka)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Nadpis (volitelný)</label>
+                  <input name="title" type="text" className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                </div>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
+                  Přidat
+                </button>
+              </form>
+            </div>
+          </details>
           {(pageComponents ?? []).map(pc => (
             <details key={pc.id} className="bg-white rounded-xl border border-gray-100 shadow-sm group">
               <summary className="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none">
@@ -143,8 +269,10 @@ export default async function DesignPage({
 
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1">Obsah (HTML)</label>
-                    <textarea name="content" rows={3} defaultValue={pc.content ?? ''}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 font-mono" />
+                    <DesignContentEditor
+                      componentId={pc.id}
+                      defaultValue={pc.content ?? ''}
+                    />
                   </div>
 
                   <div className="sm:col-span-2">
@@ -152,9 +280,21 @@ export default async function DesignPage({
                     <textarea name="data_json" rows={3}
                       defaultValue={pc.data ? JSON.stringify(pc.data, null, 2) : '{}'}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 font-mono" />
-                    <p className="text-xs text-gray-400 mt-1">
-                      Pro banner: {`{"buttons": [{"label": "Text", "url": "/url", "variant": "primary|outline"}]}`}
-                    </p>
+                    {pc.component === 'hero' && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Hero JSON: {`{"buttons": [{"label": "...", "url": "...", "variant": "primary|outline"}], "images": ["/images/hero/areaal_0.jpg", ...]}`}
+                      </p>
+                    )}
+                    {pc.component === 'parallax_strip' && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Parallax JSON: {`{"image_url": "/images/hero/areaal_o1.jpg"}`}
+                      </p>
+                    )}
+                    {pc.component === 'text_banner' && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Banner JSON: {`{"buttons": [{"label": "Text", "url": "/url", "variant": "primary|outline"}]}`}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-4">
@@ -170,12 +310,21 @@ export default async function DesignPage({
                     </label>
                   </div>
 
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 flex gap-2">
                     <button type="submit"
                       className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors">
                       Uložit komponentu
                     </button>
                   </div>
+                </form>
+
+                {/* Tlačítko smazat */}
+                <form action={deletePageComponent} className="mt-3 pt-3 border-t border-gray-100">
+                  <input type="hidden" name="id" value={pc.id} />
+                  <button type="submit"
+                    className="text-xs text-red-500 hover:text-red-700 font-medium">
+                    🗑️ Smazat komponentu
+                  </button>
                 </form>
               </div>
             </details>
@@ -286,65 +435,39 @@ export default async function DesignPage({
 
           <div className="space-y-5 text-sm text-gray-600 leading-relaxed">
             <div>
-              <h4 className="font-semibold text-gray-800 mb-1">📐 Úvodní stránka</h4>
+              <h4 className="font-semibold text-gray-800 mb-1">📐 Rozvržení úvodní stránky</h4>
               <p>
-                Úvodní stránku tvoří komponenty z tabulky <code className="bg-gray-100 px-1 rounded text-xs">page_components</code>.
-                Každá má typ (component), nadpis, obsah a JSON data.
+                Záložka <strong>Rozvržení</strong> zobrazuje vizuální přehled bloků stránky shora dolů.
               </p>
               <ul className="list-disc ml-5 mt-2 space-y-1">
-                <li><strong>text_banner</strong> — Zelený pruh s nadpisem a tlačítky. Tlačítka se definují v JSON: <code className="bg-gray-100 px-1 rounded text-xs">{`{"buttons": [{"label": "...", "url": "...", "variant": "primary|outline"}]}`}</code></li>
+                <li><strong>header</strong> — Text loga v navigaci (pole Nadpis). Pokud neexistuje, zobrazí se „TJ Dobřany".</li>
+                <li><strong>hero</strong> — Velký banner s fotkami na pozadí, poloprůhledným oknem, nadpisem, podnadpisem a tlačítky. Fotky v JSON: <code className="bg-gray-100 px-1 rounded text-xs">{`{"images": [...], "buttons": [...]}`}</code></li>
                 <li><strong>text_o_klubu</strong> — Text „O klubu" pod aktualitami. HTML obsah.</li>
+                <li><strong>parallax_strip</strong> — Prosvítající obrázek s parallax efektem. JSON: <code className="bg-gray-100 px-1 rounded text-xs">{`{"image_url": "/images/hero/areaal_o1.jpg"}`}</code></li>
               </ul>
-              <p className="mt-2">
-                Aktivní komponenty se zobrazí v pořadí dle <code className="bg-gray-100 px-1 rounded text-xs">sort_order</code>.
-                Neaktivní se nezobrazí.
-              </p>
             </div>
 
             <div>
-              <h4 className="font-semibold text-gray-800 mb-1">📰 Aktuality na úvodní stránce</h4>
-              <p>
-                Zobrazují se 3 nejnovější články s příznakem <strong>„Aktualita"</strong> (zaškrtávátko v editaci článku).
-                Články mohou být z jakékoliv sekce. Na stránce sekce Aktuality se zobrazují
-                jak články z této sekce, tak články označené jako aktualita z ostatních sekcí.
-              </p>
+              <h4 className="font-semibold text-gray-800 mb-1">📰 Aktuality</h4>
+              <p>3 nejnovější články s příznakem „Aktualita". Generují se automaticky.</p>
             </div>
 
             <div>
-              <h4 className="font-semibold text-gray-800 mb-1">📝 Obsah ze sekce „Úvod"</h4>
+              <h4 className="font-semibold text-gray-800 mb-1">📝 Sekce „Úvod"</h4>
               <p>
-                Sekce <strong>Úvod</strong> (slug: <code className="bg-gray-100 px-1 rounded text-xs">uvod</code>) slouží jako „skrytá" zásobárna
-                textů pro designové bloky. Články z této sekce lze zobrazit na úvodní stránce pod aktualitami.
-                Stačí v editaci článku zaškrtnout „Zobrazit v menu sekce" — článek se pak nabídne i jako
-                designový blok.
-              </p>
-              <p className="mt-1">
-                Příklad: článek <strong>uvod/kontakt-mapa</strong> — kontaktní údaje včetně mapy.
+                Články ze sekce <strong>Úvod</strong> (slug: <code className="bg-gray-100 px-1 rounded text-xs">uvod</code>)
+                s „Zobrazit v menu" se zobrazí pod parallax pruhem (např. kontakt-mapa).
               </p>
             </div>
 
             <div>
               <h4 className="font-semibold text-gray-800 mb-1">🦶 Patička</h4>
-              <p>
-                Zápatí webu má 3 sloupce: <strong>paticka_kontakt</strong>, <strong>paticka_odkazy</strong>, <strong>paticka_dobrany</strong>.
-                Každý sloupec má položky různých typů:
-              </p>
-              <ul className="list-disc ml-5 mt-1 space-y-1">
-                <li><code className="bg-gray-100 px-1 rounded text-xs">heading</code> — nadpis sloupce</li>
-                <li><code className="bg-gray-100 px-1 rounded text-xs">text</code> — volný text</li>
-                <li><code className="bg-gray-100 px-1 rounded text-xs">email</code> — e-mailový odkaz</li>
-                <li><code className="bg-gray-100 px-1 rounded text-xs">phone</code> — telefonní odkaz</li>
-                <li><code className="bg-gray-100 px-1 rounded text-xs">address</code> — adresa (JSON: street, city, postal)</li>
-                <li><code className="bg-gray-100 px-1 rounded text-xs">links_list</code> — seznam odkazů (JSON pole)</li>
-              </ul>
+              <p>3 sloupce: <strong>paticka_kontakt</strong>, <strong>paticka_odkazy</strong>, <strong>paticka_dobrany</strong>.</p>
             </div>
 
             <div>
               <h4 className="font-semibold text-gray-800 mb-1">⚙️ Nastavení</h4>
-              <p>
-                Klíčové hodnoty jako název webu, kontaktní e-mail a telefon.
-                Používají se v metadatech stránek a na stránce Kontakt.
-              </p>
+              <p>Klíčové hodnoty jako název webu, kontaktní e-mail a telefon.</p>
             </div>
           </div>
         </div>
