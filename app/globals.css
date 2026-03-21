@@ -225,6 +225,35 @@
   table tr:nth-child(even) td {
     @apply bg-gray-50;
   }
+  /* Plain (borderless) table variant */
+  table[data-style="plain"] th,
+  table[data-style="plain"] td {
+    border: none !important;
+    background: none !important;
+    padding: 0.2rem 0.5rem;
+  }
+  /* Image alignment (set via data-align attribute) */
+  img[data-align="left"] {
+    float: left;
+    margin: 0 1rem 0.5rem 0;
+    max-width: 50%;
+  }
+  img[data-align="right"] {
+    float: right;
+    margin: 0 0 0.5rem 1rem;
+    max-width: 50%;
+  }
+  img[data-align="center"] {
+    display: block;
+    margin: 0 auto;
+  }
   a { @apply text-green-600 underline hover:text-green-800; }
   strong { @apply font-semibold; }
+}
+
+/* Plain table in Tiptap editor */
+.tiptap-editor table[data-style="plain"] th,
+.tiptap-editor table[data-style="plain"] td {
+  border: 1px dashed #e5e7eb !important;
+  background: none !important;
 }
