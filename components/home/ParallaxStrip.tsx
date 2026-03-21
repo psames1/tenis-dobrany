@@ -12,21 +12,28 @@ type Props = {
 
 export function ParallaxStrip({ imageUrl, title, subtitle, minHeight = '300px' }: Props) {
   const ref = useRef<HTMLDivElement>(null)
-  const [offset, setOffset] = useState(0)
+  // background-position-y as percentage: 30% (top-of-image) → 70% (bottom-of-image)
+  const [bgY, setBgY] = useState(50)
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const onScroll = () => {
+    const update = () => {
       const rect = el.getBoundingClientRect()
       const vh = window.innerHeight
-      if (rect.bottom > 0 && rect.top < vh) {
-        setOffset((rect.top / vh) * 40)
-      }
+      // progress: 0 when element top enters at viewport bottom; 1 when element bottom exits at viewport top
+      const travel = vh + rect.height
+      const progress = Math.max(0, Math.min(1, (vh - rect.top) / travel))
+      // Map progress [0→1] to bgY [30%→70%] — reveals top→bottom of image as you scroll
+      setBgY(30 + progress * 40)
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
+    window.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update, { passive: true })
+    update()
+    return () => {
+      window.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
   }, [])
 
   return (
@@ -36,10 +43,10 @@ export function ParallaxStrip({ imageUrl, title, subtitle, minHeight = '300px' }
       style={{ minHeight }}
     >
       <div
-        className="absolute inset-0 bg-cover bg-center will-change-transform transition-none"
+        className="absolute inset-0 bg-cover"
         style={{
           backgroundImage: `url(${imageUrl})`,
-          transform: `translateY(${offset}px) scale(1.1)`,
+          backgroundPosition: `center ${bgY}%`,
         }}
       />
       <div className="absolute inset-0 bg-black/30" />

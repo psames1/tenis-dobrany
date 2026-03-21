@@ -37,7 +37,7 @@ export default async function AdminArticlesPage({
           <p className="text-gray-500 text-sm mt-1">{filtered.length} záznamů</p>
         </div>
         <Link
-          href="/admin/clanky/novy"
+          href={sectionFilter ? `/admin/clanky/novy?section=${sectionFilter}` : '/admin/clanky/novy'}
           className="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
         >
           + Nový článek

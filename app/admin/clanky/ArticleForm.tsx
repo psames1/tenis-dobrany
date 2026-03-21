@@ -50,6 +50,7 @@ type Props = {
   galleryImages?: GalleryImage[]
   contributors?: ContributorRecord[]
   savedDocuments?: DocumentItem[]
+  defaultSectionId?: string
 }
 
 async function uploadDocumentFile(file: File): Promise<string> {
@@ -89,7 +90,7 @@ async function uploadCoverImage(file: File): Promise<string> {
   return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
 }
 
-export function ArticleForm({ sections, article, galleryImages, contributors, savedDocuments }: Props) {
+export function ArticleForm({ sections, article, galleryImages, contributors, savedDocuments, defaultSectionId }: Props) {
   const isEdit = !!article
   const publishedDate = article?.published_at
     ? new Date(article.published_at).toISOString().slice(0, 16)
@@ -260,7 +261,7 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
           id="section_id"
           name="section_id"
           required
-          defaultValue={article?.section_id ?? ''}
+          defaultValue={article?.section_id ?? defaultSectionId ?? ''}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
         >
           <option value="">— vyberte sekci —</option>

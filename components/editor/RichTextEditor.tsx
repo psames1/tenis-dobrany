@@ -38,12 +38,16 @@ function ImageNodeView({ node, updateAttributes, selected }: NodeViewProps) {
   const imgRef = useRef<HTMLImageElement>(null)
   const startX = useRef(0)
   const startW = useRef(0)
+  const hrefInputRef = useRef<HTMLInputElement>(null)
 
   const src    = node.attrs.src  as string
   const alt    = (node.attrs.alt as string) ?? ''
   const width  = node.attrs['data-width'] as number | null
   const align  = ((node.attrs['data-align'] as string) ?? 'none') as ImgAlign
   const href   = node.attrs['data-href']  as string | null
+
+  const [editingHref, setEditingHref] = useState(false)
+  const [hrefInput, setHrefInput]     = useState('')
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -99,7 +103,7 @@ function ImageNodeView({ node, updateAttributes, selected }: NodeViewProps) {
           ? <a href={href} target="_blank" rel="noopener noreferrer">{imgEl}</a>
           : imgEl
         }
-        {selected && (
+        {(selected || editingHref) && (
           <>
             {/* Floating toolbar */}
             <div
@@ -116,28 +120,63 @@ function ImageNodeView({ node, updateAttributes, selected }: NodeViewProps) {
                 </button>
               ))}
               <span className="w-px h-3 bg-gray-200 mx-0.5" />
-              <button
-                type="button"
-                onMouseDown={e => {
-                  e.preventDefault()
-                  const url = window.prompt('URL odkazu obrázku (prázdné = odebrat nebo ponechat):', href ?? '')
-                  if (url === null) return
-                  updateAttributes({ 'data-href': url.trim() || null })
-                }}
-                className="px-1.5 py-0.5 rounded text-xs text-gray-500 hover:bg-gray-100"
-                title={href ? 'Upravit odkaz obrázku' : 'Přidat odkaz obrázku'}
-              >
-                {href ? '🔗 odkaz' : '+ odkaz'}
-              </button>
-              {href && (
-                <button
-                  type="button"
-                  onMouseDown={e => { e.preventDefault(); updateAttributes({ 'data-href': null }) }}
-                  className="px-1.5 py-0.5 rounded text-xs text-red-500 hover:bg-red-50"
-                  title="Odebrat odkaz z obrázku"
+              {/* ── Odkaz obrázku ── */}
+              {editingHref ? (
+                <form
+                  className="flex items-center gap-1"
+                  onSubmit={e => {
+                    e.preventDefault()
+                    updateAttributes({ 'data-href': hrefInput.trim() || null })
+                    setEditingHref(false)
+                  }}
+                  onMouseDown={e => e.stopPropagation()}
                 >
-                  × odkaz
-                </button>
+                  <input
+                    ref={hrefInputRef}
+                    type="text"
+                    value={hrefInput}
+                    onChange={e => setHrefInput(e.target.value)}
+                    placeholder="https://…"
+                    className="w-44 px-1.5 py-0.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                    onKeyDown={e => {
+                      e.stopPropagation()
+                      if (e.key === 'Escape') { e.preventDefault(); setEditingHref(false) }
+                    }}
+                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus
+                  />
+                  <button type="submit" className="px-1.5 py-0.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">✓</button>
+                  <button
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); setEditingHref(false) }}
+                    className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs hover:bg-gray-200"
+                  >✕</button>
+                </form>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      setHrefInput(href ?? '')
+                      setEditingHref(true)
+                    }}
+                    className="px-1.5 py-0.5 rounded text-xs text-gray-500 hover:bg-gray-100"
+                    title={href ? 'Upravit odkaz obrázku' : 'Přidat odkaz obrázku'}
+                  >
+                    {href ? '🔗 odkaz' : '+ odkaz'}
+                  </button>
+                  {href && (
+                    <button
+                      type="button"
+                      onMouseDown={e => { e.preventDefault(); updateAttributes({ 'data-href': null }) }}
+                      className="px-1.5 py-0.5 rounded text-xs text-red-500 hover:bg-red-50"
+                      title="Odebrat odkaz z obrázku"
+                    >
+                      × odkaz
+                    </button>
+                  )}
+                </>
               )}
               <button
                 type="button"

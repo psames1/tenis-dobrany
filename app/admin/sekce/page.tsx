@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { saveSection, createSection, deleteSection } from '../actions'
+import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Admin – Sekce' }
@@ -72,9 +73,18 @@ export default async function AdminSekce({
                   <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">v menu</span>
                 )}
               </div>
-              <svg className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/admin/clanky?section=${section.slug}`}
+                  onClick={e => e.stopPropagation()}
+                  className="px-2.5 py-1 text-xs font-medium text-gray-500 bg-gray-100 rounded-lg hover:bg-green-50 hover:text-green-700 transition-colors"
+                >
+                  Články →
+                </Link>
+                <svg className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </summary>
 
             <div className="border-t border-gray-100 px-5 py-4">
