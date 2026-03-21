@@ -61,9 +61,8 @@ export default async function HomePage() {
       .select('id, slug, title, excerpt, content, image_url, sections!inner(slug)')
       .eq('is_active', true)
       .eq('sections.slug', 'uvod')
-      .eq('show_in_menu', true)
       .in('visibility', visibilities)
-      .order('sort_order', { ascending: false }),
+      .order('sort_order', { ascending: true }),
   ])
 
   const all = components ?? []
@@ -109,10 +108,10 @@ export default async function HomePage() {
                       className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all"
                     >
                       <div className="p-5 flex flex-col flex-1">
-                        <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
-                        <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-2">
+                        <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-1">
                           {article.title}
                         </h3>
+                        <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
                         {article.excerpt && (
                           <p className="text-sm text-gray-500 line-clamp-3 flex-1">{article.excerpt}</p>
                         )}

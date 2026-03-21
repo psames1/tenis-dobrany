@@ -60,14 +60,12 @@ export function HeroCarousel({ title, subtitle, buttons, images, interval = 6000
               style={{ backgroundImage: `url(${src})` }}
             />
           ))}
-          {/* Zelený overlay pro čitelnost textu */}
-          <div className="absolute inset-0 bg-green-900/55" />
         </div>
       )}
 
       {/* Obsah s poloprůhledným oknem */}
       <div className="relative z-10 flex items-center justify-center min-h-[260px] px-4 sm:px-6 lg:px-8 py-10">
-        <div className="bg-green-900/40 backdrop-blur-sm rounded-2xl px-6 py-6 sm:px-10 sm:py-8 max-w-2xl w-full text-center">
+        <div className="bg-green-800/25 backdrop-blur-sm rounded-2xl px-6 py-6 sm:px-10 sm:py-8 max-w-2xl w-full text-center">
           {title && (
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3 leading-tight tracking-tight">
               {title}

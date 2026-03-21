@@ -1,20 +1,142 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 64 64"
+   fill="none"
+   version="1.1"
+   id="svg9"
+   sodipodi:docname="tennis-racket.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs9" />
+  <sodipodi:namedview
+     id="namedview9"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="12.609375"
+     inkscape:cx="31.960347"
+     inkscape:cy="32"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg9" />
   <!-- Handle -->
-  <rect x="8" y="44" width="6" height="16" rx="2" transform="rotate(-45 8 44)" fill="#15803d" />
-  <rect x="11" y="41" width="6" height="4" rx="1" transform="rotate(-45 11 41)" fill="#166534" />
+  <rect
+     x="-24.093609"
+     y="44.078426"
+     width="15.516728"
+     height="4"
+     rx="2.5861213"
+     fill="#166534"
+     id="rect2"
+     style="stroke-width:1.60814"
+     transform="rotate(-45.939469)" />
   <!-- Head -->
-  <ellipse cx="36" cy="20" rx="16" ry="20" transform="rotate(-45 36 20)" stroke="#15803d" stroke-width="3" fill="none" />
+  <ellipse
+     cx="45.869625"
+     cy="-10.588042"
+     rx="16"
+     ry="20"
+     transform="rotate(43.189325)"
+     stroke="#15803d"
+     stroke-width="3"
+     fill="none"
+     id="ellipse2" />
   <!-- Strings horizontal -->
-  <line x1="25" y1="12" x2="47" y2="12" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
-  <line x1="23" y1="17" x2="49" y2="17" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
-  <line x1="23" y1="22" x2="49" y2="22" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
-  <line x1="25" y1="27" x2="47" y2="27" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line
+     x1="38.14518"
+     y1="10.312697"
+     x2="54.185299"
+     y2="25.369745"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line2" />
+  <line
+     x1="33.264927"
+     y1="12.589356"
+     x2="52.221432"
+     y2="30.384047"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line3" />
+  <line
+     x1="29.842873"
+     y1="16.234837"
+     x2="48.799374"
+     y2="34.02953"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line4" />
+  <line
+     x1="27.879009"
+     y1="21.24914"
+     x2="43.919128"
+     y2="36.306187"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line5" />
   <!-- Strings vertical -->
-  <line x1="31" y1="3" x2="31" y2="37" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
-  <line x1="36" y1="1" x2="36" y2="39" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
-  <line x1="41" y1="3" x2="41" y2="37" stroke="#22c55e" stroke-width="0.8" transform="rotate(-45 36 20)" />
+  <line
+     x1="48.679462"
+     y1="7.8572998"
+     x2="25.409473"
+     y2="32.646568"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line6" />
+  <line
+     x1="53.69376"
+     y1="9.8211632"
+     x2="27.686131"
+     y2="37.526821"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line7" />
+  <line
+     x1="55.970421"
+     y1="14.701412"
+     x2="32.700436"
+     y2="39.490681"
+     stroke="#22c55e"
+     stroke-width="0.8"
+     id="line8" />
   <!-- Ball -->
-  <circle cx="52" cy="10" r="5" fill="#eab308" />
-  <path d="M49 7c2 2 2 4 0 6" stroke="#facc15" stroke-width="1" fill="none" />
-  <path d="M55 7c-2 2-2 4 0 6" stroke="#facc15" stroke-width="1" fill="none" />
+  <circle
+     cx="40.947853"
+     cy="-49.9216"
+     r="5"
+     fill="#eab308"
+     id="circle8"
+     transform="rotate(88.189325)" />
+  <path
+     d="m 54.094218,36.256738 c -1.935807,2.062195 -3.934809,2.12539 -5.997004,0.189583"
+     stroke="#facc15"
+     stroke-width="1"
+     fill="none"
+     id="path8" />
+  <path
+     d="M 54.2838,42.253742 C 52.221605,40.317935 50.222603,40.38113 48.286796,42.443325"
+     stroke="#facc15"
+     stroke-width="1"
+     fill="none"
+     id="path9" />
+  <rect
+     x="43.381901"
+     y="22.220722"
+     width="6"
+     height="16"
+     rx="2"
+     transform="rotate(44.760224)"
+     fill="#15803d"
+     id="rect1" />
 </svg>

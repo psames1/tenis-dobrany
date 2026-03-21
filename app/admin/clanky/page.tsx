@@ -95,8 +95,13 @@ export default async function AdminArticlesPage({
                   <tr key={article.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="font-medium text-gray-900 truncate max-w-xs">{article.title}</div>
+                      {sec && (
+                        <code className="text-xs text-gray-400 font-mono">
+                          /{(sec as { slug: string }).slug}/{article.slug}
+                        </code>
+                      )}
                       {article.is_members_only && (
-                        <span className="text-xs text-green-600">🔒 pouze členové</span>
+                        <span className="block text-xs text-green-600">🔒 pouze členové</span>
                       )}
                     </td>
                     <td className="px-5 py-3 text-gray-500 hidden md:table-cell">

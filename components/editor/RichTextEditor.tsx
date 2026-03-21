@@ -7,13 +7,14 @@ import { Table } from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
+import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import { useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bold, Italic, Strikethrough, Heading2, Heading3, Heading4,
   List, ListOrdered, Quote, Minus, Table2, Image as ImageIcon,
-  Undo2, Redo2, TableCellsMerge, Plus, Trash2,
+  Undo2, Redo2, Plus, Trash2, Link2, Link2Off,
 } from 'lucide-react'
 
 // ── Upload helper ─────────────────────────────────────────────────────────────
@@ -77,6 +78,9 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
   const [gallery, setGallery] = useState<GalleryImage[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  // Table size picker state
+  const [showTablePicker, setShowTablePicker] = useState(false)
+  const [hoverCell, setHoverCell] = useState<[number, number]>([0, 0])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -94,6 +98,10 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
       TableRow,
       TableHeader,
       TableCell,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { rel: 'noopener noreferrer', class: 'underline text-green-700 hover:text-green-900' },
+      }),
       Placeholder.configure({ placeholder: 'Začněte psát obsah článku…' }),
     ],
     content: defaultValue ?? '',
@@ -159,6 +167,16 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
 
   const inTable = editor.isActive('table')
 
+  const handleLinkToggle = () => {
+    if (editor.isActive('link')) {
+      editor.chain().focus().unsetLink().run()
+    } else {
+      const url = window.prompt('URL odkazu (např. https://example.com):')
+      if (!url) return
+      editor.chain().focus().setLink({ href: url }).run()
+    }
+  }
+
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent">
 
@@ -222,12 +240,51 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
         <Sep />
 
         {/* Tabulka */}
-        <Btn
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-          title="Vložit tabulku 3×3 (tip: z Excelu lze vložit Ctrl+V)"
-        >
-          <Table2 size={16} />
-        </Btn>
+        <div className="relative">
+          <Btn
+            onClick={() => setShowTablePicker(v => !v)}
+            active={showTablePicker}
+            title="Vložit tabulku (vyberte velikost)"
+          >
+            <Table2 size={16} />
+          </Btn>
+          {showTablePicker && (
+            <div
+              className="absolute left-0 top-8 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2"
+              onMouseLeave={() => setHoverCell([0, 0])}
+            >
+              <div className="text-xs text-gray-500 mb-1 text-center">
+                {hoverCell[0] > 0 ? `${hoverCell[1]}×${hoverCell[0]}` : 'Vyberte velikost'}
+              </div>
+              <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(8, 1fr)' }}>
+                {Array.from({ length: 6 }, (_, row) =>
+                  Array.from({ length: 8 }, (_, col) => (
+                    <button
+                      key={`${row}-${col}`}
+                      type="button"
+                      className={`w-5 h-5 border rounded-sm transition-colors ${
+                        row < hoverCell[0] && col < hoverCell[1]
+                          ? 'bg-green-200 border-green-400'
+                          : 'bg-gray-100 border-gray-200 hover:bg-green-100'
+                      }`}
+                      onMouseEnter={() => setHoverCell([row + 1, col + 1])}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        editor.chain().focus().insertTable({
+                          rows: row + 1,
+                          cols: col + 1,
+                          withHeaderRow: true,
+                        }).run()
+                        setShowTablePicker(false)
+                        setHoverCell([0, 0])
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Tabulka – kontextové operace (zobrazí se jen v tabulce) */}
         {inTable && (
@@ -258,7 +315,16 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
 
         <Sep />
 
-        {/* Vložit obrázek na pozici kurzoru */}
+        {/* Odkaz */}
+        <Btn
+          onClick={handleLinkToggle}
+          active={editor.isActive('link')}
+          title={editor.isActive('link') ? 'Odebrat odkaz' : 'Vložit odkaz (URL)'}
+        >
+          {editor.isActive('link') ? <Link2Off size={16} /> : <Link2 size={16} />}
+        </Btn>
+
+        <Sep />
         <input ref={inlineFileRef} type="file" accept="image/*" className="hidden" onChange={handleInlineUpload} />
         <Btn
           onClick={() => inlineFileRef.current?.click()}
