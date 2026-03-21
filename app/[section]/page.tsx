@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { visibilitiesForRole } from '@/lib/supabase/visibility'
 
 type Props = {
   params: Promise<{ section: string }>
@@ -31,6 +32,17 @@ function formatDate(dateStr: string) {
   })
 }
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, ' ').trim()
+}
+
+function excerptFallback(excerpt: string | null, content: string | null, maxChars = 150): string | null {
+  if (excerpt?.trim()) return excerpt.trim()
+  if (!content) return null
+  const plain = stripHtml(content)
+  return plain.length > maxChars ? plain.slice(0, maxChars) + '…' : plain || null
+}
+
 export default async function SectionPage({ params }: Props) {
   const { section: sectionSlug } = await params
   const supabase = await createClient()
@@ -47,13 +59,36 @@ export default async function SectionPage({ params }: Props) {
 
   if (!section) notFound()
 
-  const { data: pages } = await supabase
+  // Zjisti roli uživatele → filtrování viditelnosti článků
+  let role: string | null = null
+  if (user) {
+    const { data: up } = await supabase
+      .from('user_profiles')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single()
+    if (up?.is_active) role = up.role ?? 'member'
+  }
+  const visibilities = visibilitiesForRole(role)
+
+  // Sekce "aktuality" zobrazuje i články z jiných sekcí označené is_news=true
+  const isAktuality = sectionSlug === 'aktuality'
+
+  const pagesQuery = supabase
     .from('pages')
-    .select('id, slug, title, excerpt, image_url, published_at, is_members_only')
-    .eq('section_id', section.id)
+    .select('id, slug, title, excerpt, content, image_url, published_at, is_members_only, sections(slug)')
     .eq('is_active', true)
+    .in('visibility', visibilities)
     .order('sort_order', { ascending: false })
     .order('published_at', { ascending: false })
+
+  if (isAktuality) {
+    pagesQuery.or(`section_id.eq.${section.id},is_news.eq.true`)
+  } else {
+    pagesQuery.eq('section_id', section.id)
+  }
+
+  const { data: pages } = await pagesQuery
 
   const articles = pages ?? []
 
@@ -78,12 +113,17 @@ export default async function SectionPage({ params }: Props) {
         </div>
       ) : (
         <div className="space-y-5">
-          {articles.map(article => (
+          {articles.map(article => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const sec = Array.isArray((article as any).sections) ? (article as any).sections[0] : (article as any).sections
+            const articleSection = sec?.slug ?? sectionSlug
+            const preview = excerptFallback(article.excerpt, article.content)
+            return (
             <article
               key={article.id}
               className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md hover:border-green-200 transition-all"
             >
-              <Link href={`/${sectionSlug}/${article.slug}`} className="flex flex-col sm:flex-row group">
+              <Link href={`/${articleSection}/${article.slug}`} className="flex flex-col sm:flex-row group">
                 {/* Náhled obrázku / placeholder */}
                 <div className="sm:w-44 h-40 sm:h-auto bg-green-50 flex items-center justify-center text-5xl flex-shrink-0">
                   {article.image_url ? (
@@ -110,8 +150,8 @@ export default async function SectionPage({ params }: Props) {
                   <h2 className="text-lg font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-2">
                     {article.title}
                   </h2>
-                  {article.excerpt && (
-                    <p className="text-sm text-gray-500 line-clamp-2">{article.excerpt}</p>
+                  {preview && (
+                    <p className="text-sm text-gray-500 line-clamp-2">{preview}</p>
                   )}
                   <span className="mt-3 text-sm text-green-600 font-medium">
                     Číst více →
@@ -119,7 +159,8 @@ export default async function SectionPage({ params }: Props) {
                 </div>
               </Link>
             </article>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

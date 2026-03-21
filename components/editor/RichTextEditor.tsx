@@ -34,6 +34,8 @@ type GalleryImage = { url: string; name: string }
 type Props = {
   defaultValue?: string | null
   name?: string
+  showImagePanel?: boolean
+  minHeight?: string
 }
 
 // ── Toolbar button ────────────────────────────────────────────────────────────
@@ -68,7 +70,7 @@ function Btn({
 const Sep = () => <div className="w-px h-5 bg-gray-300 mx-0.5 self-center shrink-0" />
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function RichTextEditor({ defaultValue, name = 'content' }: Props) {
+export function RichTextEditor({ defaultValue, name = 'content', showImagePanel = false, minHeight = 'min-h-64' }: Props) {
   const hiddenRef = useRef<HTMLInputElement>(null)
   const inlineFileRef = useRef<HTMLInputElement>(null)
   const galleryFileRef = useRef<HTMLInputElement>(null)
@@ -100,7 +102,7 @@ export function RichTextEditor({ defaultValue, name = 'content' }: Props) {
     },
     editorProps: {
       attributes: {
-        class: 'tiptap-editor min-h-64 px-4 py-3 focus:outline-none text-gray-800',
+        class: `tiptap-editor ${minHeight} px-4 py-3 focus:outline-none text-gray-800`,
       },
     },
   })
@@ -297,6 +299,7 @@ export function RichTextEditor({ defaultValue, name = 'content' }: Props) {
       )}
 
       {/* ── Panel obrázků článku ─────────────────────────────────────────────── */}
+      {showImagePanel && (
       <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <div>
@@ -368,6 +371,7 @@ export function RichTextEditor({ defaultValue, name = 'content' }: Props) {
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }

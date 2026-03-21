@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { MobileMenu } from './MobileMenu'
 import { AvatarMenu } from './AvatarMenu'
 import { ChevronDown } from 'lucide-react'
+import { visibilitiesForRole } from '@/lib/supabase/visibility'
 
 export type NavItem = {
   id: string
@@ -23,7 +24,7 @@ export async function Navigation() {
       .order('menu_order'),
     supabase
       .from('pages')
-      .select('id, title, slug, section_id')
+      .select('id, title, slug, section_id, visibility')
       .eq('is_active', true)
       .eq('show_in_menu', true)
       .order('sort_order', { ascending: false }),
@@ -41,9 +42,12 @@ export async function Navigation() {
     profile = data
   }
 
-  // Seskup stránky podle section_id
+  // Seskup stránky podle section_id — jen ty, které smí přihlášený uživatel vidět
+  const allowedVis = visibilitiesForRole(profile?.role)
+  const visiblePages = (menuPages ?? []).filter(p => allowedVis.includes(p.visibility ?? 'public'))
+
   const pagesBySection = new Map<string, { id: string; title: string; slug: string; section_id: string }[]>()
-  for (const page of menuPages ?? []) {
+  for (const page of visiblePages) {
     if (!page.section_id) continue
     if (!pagesBySection.has(page.section_id)) pagesBySection.set(page.section_id, [])
     pagesBySection.get(page.section_id)!.push(page as { id: string; title: string; slug: string; section_id: string })

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { visibilitiesForRole } from '@/lib/supabase/visibility'
 
 export const metadata: Metadata = {
   title: 'Tenisový oddíl TJ Dobřany',
@@ -18,27 +19,38 @@ function formatDate(dateStr: string) {
 export default async function HomePage() {
   const supabase = await createClient()
 
-  const [
-    { data: components },
-    { data: newsArticles },
-  ] = await Promise.all([
+  // Krok 1: user + page_components paralelně (user z cookie, levné)
+  const [{ data: components }, { data: { user } }] = await Promise.all([
     supabase
       .from('page_components')
       .select('id, component, title, subtitle, content, data')
       .eq('page_key', 'home')
       .eq('is_active', true)
       .order('sort_order'),
-
-    // Nejnovější 3 aktuality (is_news = true, ze všech sekcí)
-    supabase
-      .from('pages')
-      .select('id, slug, title, excerpt, image_url, published_at, sections!inner(slug)')
-      .eq('is_active', true)
-      .eq('is_news', true)
-      .eq('visibility', 'public')
-      .order('published_at', { ascending: false })
-      .limit(3),
+    supabase.auth.getUser(),
   ])
+
+  // Krok 2: role uživatele (jen 1 DB dotaz pokud je přihlášen)
+  let role: string | null = null
+  if (user) {
+    const { data: up } = await supabase
+      .from('user_profiles')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single()
+    if (up?.is_active) role = up.role ?? 'member'
+  }
+  const visibilities = visibilitiesForRole(role)
+
+  // Krok 3: nejnovější aktuality pro danou úroveň oprávnění
+  const { data: newsArticles } = await supabase
+    .from('pages')
+    .select('id, slug, title, excerpt, image_url, published_at, sections!inner(slug)')
+    .eq('is_active', true)
+    .eq('is_news', true)
+    .in('visibility', visibilities)
+    .order('published_at', { ascending: false })
+    .limit(3)
 
   const all = components ?? []
   const banner   = all.find(c => c.component === 'text_banner')
@@ -83,53 +95,53 @@ export default async function HomePage() {
       {/* ── Nejnovější aktuality ─────────────────────────────────────── */}
       <section className="py-14 sm:py-20 bg-gray-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Aktuality</h2>
-            <Link
-              href="/aktuality"
-              className="text-sm text-green-600 font-medium hover:text-green-800 transition-colors whitespace-nowrap ml-4"
-            >
-              Všechny aktuality →
-            </Link>
-          </div>
-
           {!newsArticles || newsArticles.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
               <p className="text-gray-400">Zatím žádné aktuality.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {newsArticles.map(article => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const sec = Array.isArray(article.sections) ? (article.sections as any[])[0] : article.sections
-                const sectionSlug = sec?.slug ?? 'aktuality'
-                return (
-                  <Link
-                    key={article.id}
-                    href={`/${sectionSlug}/${article.slug}`}
-                    className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all"
-                  >
-                    <div className="bg-green-50 h-40 flex items-center justify-center text-5xl flex-shrink-0 overflow-hidden">
-                      {article.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={article.image_url} alt={article.title} className="w-full h-full object-cover" />
-                      ) : (
-                        '📰'
-                      )}
-                    </div>
-                    <div className="p-5 flex flex-col flex-1">
-                      <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-2">
-                        {article.title}
-                      </h3>
-                      {article.excerpt && (
-                        <p className="text-sm text-gray-500 line-clamp-3 flex-1">{article.excerpt}</p>
-                      )}
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {newsArticles.map(article => {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const sec = Array.isArray(article.sections) ? (article.sections as any[])[0] : article.sections
+                  const sectionSlug = sec?.slug ?? 'aktuality'
+                  return (
+                    <Link
+                      key={article.id}
+                      href={`/${sectionSlug}/${article.slug}`}
+                      className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md hover:border-green-200 transition-all"
+                    >
+                      <div className="bg-green-50 h-40 flex items-center justify-center text-5xl flex-shrink-0 overflow-hidden">
+                        {article.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={article.image_url} alt={article.title} className="w-full h-full object-cover" />
+                        ) : (
+                          '📰'
+                        )}
+                      </div>
+                      <div className="p-5 flex flex-col flex-1">
+                        <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
+                        <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-2">
+                          {article.title}
+                        </h3>
+                        {article.excerpt && (
+                          <p className="text-sm text-gray-500 line-clamp-3 flex-1">{article.excerpt}</p>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+              <div className="mt-8 text-center">
+                <Link
+                  href="/aktuality"
+                  className="inline-block text-sm text-green-600 font-medium hover:text-green-800 transition-colors"
+                >
+                  Další články →
+                </Link>
+              </div>
+            </>
           )}
         </div>
       </section>

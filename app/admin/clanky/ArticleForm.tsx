@@ -272,16 +272,13 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
 
       {/* Perex */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="excerpt">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Perex (krátký popis pro výpis)
         </label>
-        <textarea
-          id="excerpt"
+        <RichTextEditor
           name="excerpt"
-          rows={3}
-          defaultValue={article?.excerpt ?? ''}
-          placeholder="Krátký popis zobrazený ve výpisu článků…"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+          defaultValue={article?.excerpt}
+          minHeight="min-h-28"
         />
       </div>
 

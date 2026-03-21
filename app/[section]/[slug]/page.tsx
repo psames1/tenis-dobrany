@@ -204,20 +204,6 @@ export default async function ArticlePage({ params }: Props) {
           {formatDate(page.published_at)}
         </time>
 
-        {page.image_url && (
-          <img
-            src={page.image_url}
-            alt={page.title}
-            className="w-full h-64 sm:h-80 object-cover rounded-2xl mb-8"
-          />
-        )}
-
-        {page.excerpt && (
-          <p className="text-lg text-gray-600 leading-relaxed border-l-4 border-green-300 pl-4 mb-8">
-            {page.excerpt}
-          </p>
-        )}
-
         {page.content && (
           <div
             className="article-content"
