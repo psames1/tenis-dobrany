@@ -26,6 +26,7 @@ export async function getOrgContext(): Promise<OrgContext> {
 
 /**
  * Resolve full organization from DB based on slug or custom domain.
+ * On localhost/dev: falls back to user's default_organization_id or first membership.
  * Returns null if not found.
  */
 export async function getOrganization() {
@@ -53,6 +54,58 @@ export async function getOrganization() {
       .eq('is_active', true)
       .single()
     return data
+  }
+
+  // Fallback pro localhost / dev prostředí:
+  // 1. Pokud je v env nastavený NEXT_PUBLIC_ORG_SLUG, použij ho
+  const envSlug = process.env.NEXT_PUBLIC_ORG_SLUG
+  if (envSlug) {
+    const { data } = await supabase
+      .from('app_organizations')
+      .select('*')
+      .eq('slug', envSlug)
+      .eq('is_active', true)
+      .single()
+    if (data) return data
+  }
+
+  // 2. Použij default_organization_id z profilu přihlášeného uživatele
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('default_organization_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.default_organization_id) {
+      const { data } = await supabase
+        .from('app_organizations')
+        .select('*')
+        .eq('id', profile.default_organization_id)
+        .eq('is_active', true)
+        .single()
+      if (data) return data
+    }
+
+    // 3. Poslední záchrana — první aktivní organizace uživatele
+    const { data: membership } = await supabase
+      .from('app_organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .limit(1)
+      .single()
+
+    if (membership?.organization_id) {
+      const { data } = await supabase
+        .from('app_organizations')
+        .select('*')
+        .eq('id', membership.organization_id)
+        .eq('is_active', true)
+        .single()
+      if (data) return data
+    }
   }
 
   return null

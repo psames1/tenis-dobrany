@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createCourt, toggleCourtActive, updateCourtRule } from './actions'
 
 type CourtRule = {
@@ -37,11 +38,17 @@ export default function CourtManagement({
   courts: Court[]
   organizationId: string
 }) {
+  const router = useRouter()
   const [courts, setCourts] = useState(initialCourts)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // Sync state when server provides fresh data after revalidation
+  useEffect(() => {
+    setCourts(initialCourts)
+  }, [initialCourts])
 
   function handleToggleActive(courtId: string, current: boolean) {
     startTransition(async () => {
@@ -49,7 +56,7 @@ export default function CourtManagement({
       if (result.error) {
         setError(result.error)
       } else {
-        setCourts(prev => prev.map(c => c.id === courtId ? { ...c, active: !current } : c))
+        router.refresh()
       }
     })
   }
@@ -63,6 +70,7 @@ export default function CourtManagement({
         setError(result.error)
       } else {
         setExpandedRule(null)
+        router.refresh()
       }
     })
   }
@@ -76,6 +84,7 @@ export default function CourtManagement({
         setError(result.error)
       } else {
         setShowNewForm(false)
+        router.refresh()
       }
     })
   }
