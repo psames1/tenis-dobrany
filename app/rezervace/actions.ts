@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrganization, getOrgContext } from '@/lib/organization'
 
 export type CreateReservationInput = {
@@ -25,14 +26,15 @@ export async function createReservation(
   input: CreateReservationInput
 ): Promise<ReservationActionResult> {
   const supabase = await createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     return { success: false, error: 'Pro rezervaci se musíte přihlásit.' }
   }
 
-  // Ověřit, že uživatel je aktivní člen organizace
-  const { data: membership } = await supabase
+  // Ověřit, že uživatel je aktivní člen organizace (admin klient = obchází RLS)
+  const { data: membership } = await admin
     .from('app_organization_members')
     .select('role')
     .eq('organization_id', input.organizationId)
@@ -44,8 +46,8 @@ export async function createReservation(
     return { success: false, error: 'Nemáte oprávnění rezervovat v této organizaci.' }
   }
 
-  // Ověřit, že kurt patří do organizace
-  const { data: court } = await supabase
+  // Ověřit, že kurt patří do organizace (admin klient)
+  const { data: court } = await admin
     .from('app_courts')
     .select('id')
     .eq('id', input.courtId)
@@ -73,8 +75,8 @@ export async function createReservation(
     return { success: false, error: 'Nelze rezervovat čas v minulosti.' }
   }
 
-  // Vložit rezervaci — DB trigger zabrání kolizi
-  const { data, error } = await supabase
+  // Vložit rezervaci přes admin klienta (INSERT RLS by také mohl selhat)
+  const { data, error } = await admin
     .from('app_court_reservations')
     .insert({
       court_id: input.courtId,
@@ -115,14 +117,15 @@ export async function cancelReservation(
   reservationId: string
 ): Promise<CancelReservationResult> {
   const supabase = await createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     return { success: false, error: 'Pro zrušení rezervace se musíte přihlásit.' }
   }
 
-  // Načíst rezervaci (RLS zajistí viditelnost pouze pro členy organizace)
-  const { data: reservation } = await supabase
+  // Načíst rezervaci (admin klient = obchází RLS)
+  const { data: reservation } = await admin
     .from('app_court_reservations')
     .select('id, user_id, start_time, status, organization_id')
     .eq('id', reservationId)
@@ -141,9 +144,9 @@ export async function cancelReservation(
     return { success: false, error: 'Nelze zrušit proběhlou rezervaci.' }
   }
 
-  // Kontrola oprávnění: vlastní rezervace nebo admin/manager
+  // Kontrola oprávnění: vlastní rezervace nebo admin/manager (admin klient)
   if (reservation.user_id !== user.id) {
-    const { data: membership } = await supabase
+    const { data: membership } = await admin
       .from('app_organization_members')
       .select('role')
       .eq('organization_id', reservation.organization_id)
@@ -156,7 +159,7 @@ export async function cancelReservation(
     }
   }
 
-  const { error } = await supabase
+  const { error } = await admin
     .from('app_court_reservations')
     .update({
       status: 'cancelled',

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrgContext, getOrganization } from '@/lib/organization'
 import ReservationGrid, { type Court, type CourtRule, type Reservation } from './ReservationGrid'
 
@@ -33,8 +34,9 @@ type PageProps = {
 
 export default async function RezervacePage({ searchParams }: PageProps) {
   const supabase = await createClient()
+  const admin = createAdminClient()
 
-  // Autentikace
+  // Autentikace (použij anon klienta — jen session cookies)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?redirectTo=/rezervace')
 
@@ -51,8 +53,8 @@ export default async function RezervacePage({ searchParams }: PageProps) {
     )
   }
 
-  // Ověřit členství uživatele v organizaci
-  const { data: membership } = await supabase
+  // Ověřit členství uživatele v organizaci (admin klient = obchází RLS)
+  const { data: membership } = await admin
     .from('app_organization_members')
     .select('role')
     .eq('organization_id', org.id)
@@ -76,8 +78,8 @@ export default async function RezervacePage({ searchParams }: PageProps) {
   // Sanitace: datum musí být ve formátu YYYY-MM-DD a nesmí být v minulosti víc než 1 den
   const date = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : today
 
-  // Načíst aktivní kurty organizace
-  const { data: courtsRaw } = await supabase
+  // Načíst aktivní kurty organizace (admin klient = obchází RLS)
+  const { data: courtsRaw } = await admin
     .from('app_courts')
     .select('id, name, surface, indoor, sort_order')
     .eq('organization_id', org.id)
@@ -97,8 +99,8 @@ export default async function RezervacePage({ searchParams }: PageProps) {
 
   const courtIds = courts.map(c => c.id)
 
-  // Načíst pravidla rezervací — platná pro vybraný datum
-  const { data: rulesRaw } = await supabase
+  // Načíst pravidla rezervací — platná pro vybraný datum (admin klient)
+  const { data: rulesRaw } = await admin
     .from('app_court_reservation_rules')
     .select('court_id, time_from, time_to, slot_minutes, price_member, price_guest, max_advance_days')
     .in('court_id', courtIds)
@@ -132,7 +134,7 @@ export default async function RezervacePage({ searchParams }: PageProps) {
   const dayStart = pragueToUTC(date, '00:00')
   const dayEnd = pragueToUTC(addDays(date, 1), '00:00')
 
-  const { data: reservationsRaw } = await supabase
+  const { data: reservationsRaw } = await admin
     .from('app_court_reservations')
     .select(`
       id, court_id, user_id, start_time, end_time,
