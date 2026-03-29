@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ReservationDialog, { type DialogData } from './ReservationDialog'
@@ -44,8 +44,8 @@ type Props = {
   courts: Court[]
   rules: CourtRule[]
   initialReservations: Reservation[]
-  initialDate: string     // YYYY-MM-DD (Praha tz)
-  maxAdvanceDays: number  // globální maximum pro navigaci
+  initialDate: string
+  maxAdvanceDays: number
   currentUserId: string
 }
 
@@ -56,86 +56,78 @@ type SlotState = 'free' | 'mine' | 'taken' | 'past'
 // Pomocné funkce
 // ---------------------------------------------------------------------------
 
-function generateSlots(timeFrom: string, timeTo: string, slotMinutes: number): TimeSlot[] {
+/** Generuje 30-minutové sloty pro vizuální grid (bez ohledu na slotMinutes pravidla) */
+function gen30Slots(from: string, to: string): TimeSlot[] {
   const slots: TimeSlot[] = []
-  let [h, m] = timeFrom.split(':').map(Number)
-  const [eh, em] = timeTo.split(':').map(Number)
-  const endTotal = eh * 60 + em
-  while (h * 60 + m + slotMinutes <= endTotal) {
+  let [h, m] = from.split(':').map(Number)
+  const [eh, em] = to.split(':').map(Number)
+  const end = eh * 60 + em
+  while (h * 60 + m + 30 <= end) {
     const s = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-    const total2 = h * 60 + m + slotMinutes
-    const e = `${String(Math.floor(total2 / 60)).padStart(2, '0')}:${String(total2 % 60).padStart(2, '0')}`
+    const t = h * 60 + m + 30
+    const e = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
     slots.push({ start: s, end: e })
-    h = Math.floor(total2 / 60)
-    m = total2 % 60
+    h = Math.floor(t / 60); m = t % 60
   }
   return slots
 }
 
-/** Vrátí ISO string pro datum+čas v Praha timezone → UTC */
 function pragueToUTC(dateStr: string, timeStr: string): string {
   const naive = new Date(`${dateStr}T${timeStr}:00`)
   const tz = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Europe/Prague',
-    timeZoneName: 'shortOffset',
+    timeZone: 'Europe/Prague', timeZoneName: 'shortOffset',
   }).formatToParts(naive).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+1'
-  const match = tz.match(/GMT([+-]\d+)/)
-  const offsetH = parseInt(match?.[1] ?? '1', 10)
-  return new Date(naive.getTime() - offsetH * 3600 * 1000).toISOString()
+  const offsetH = parseInt(tz.match(/GMT([+-]\d+)/)?.[1] ?? '1', 10)
+  return new Date(naive.getTime() - offsetH * 3_600_000).toISOString()
 }
 
-/** Převede UTC ISO na lokální čas v Praha tz */
-function toLocalTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('cs-CZ', {
-    timeZone: 'Europe/Prague',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+function utcToHHMM(iso: string): string {
+  return new Date(iso).toLocaleTimeString('sv-SE', {
+    timeZone: 'Europe/Prague', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).substring(0, 5)
 }
 
-/** Dnešní datum v Praha tz jako YYYY-MM-DD */
 function pragueToday(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' })
 }
 
-/** Datum +/- dny jako YYYY-MM-DD */
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T12:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().split('T')[0]
+function addDays(d: string, n: number): string {
+  const date = new Date(`${d}T12:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + n)
+  return date.toISOString().split('T')[0]
 }
 
 function getSlotState(
-  slot: TimeSlot,
-  courtId: string,
-  dateStr: string,
-  reservations: Reservation[],
-  userId: string,
+  slot: TimeSlot, courtId: string, dateStr: string,
+  reservations: Reservation[], userId: string,
 ): SlotState {
-  const slotStartUTC = pragueToUTC(dateStr, slot.start)
-  const slotEndUTC = pragueToUTC(dateStr, slot.end)
-  const slotStart = new Date(slotStartUTC)
-  const slotEnd = new Date(slotEndUTC)
-  const now = new Date()
-
-  if (slotStart < now) return 'past'
-
-  const res = reservations.find(r => {
-    if (r.courtId !== courtId || r.status === 'cancelled') return false
-    const rStart = new Date(r.startTime)
-    const rEnd = new Date(r.endTime)
-    return rStart < slotEnd && rEnd > slotStart
-  })
-
+  const s = new Date(pragueToUTC(dateStr, slot.start))
+  const e = new Date(pragueToUTC(dateStr, slot.end))
+  if (s < new Date()) return 'past'
+  const res = reservations.find(r =>
+    r.courtId === courtId && r.status !== 'cancelled' &&
+    new Date(r.startTime) < e && new Date(r.endTime) > s
+  )
   if (!res) return 'free'
   return res.userId === userId ? 'mine' : 'taken'
 }
 
-const SLOT_COLORS: Record<SlotState, string> = {
-  free: 'bg-green-100 hover:bg-green-200 border-green-200 text-green-800 cursor-pointer',
-  mine: 'bg-blue-200 hover:bg-blue-300 border-blue-400 text-blue-900 cursor-pointer',
-  taken: 'bg-red-100 border-red-200 text-red-600 cursor-default',
-  past: 'bg-gray-100 border-gray-200 text-gray-400 cursor-default',
+function getResAtSlot(
+  slot: TimeSlot, courtId: string, dateStr: string, reservations: Reservation[],
+): Reservation | null {
+  const s = new Date(pragueToUTC(dateStr, slot.start))
+  const e = new Date(pragueToUTC(dateStr, slot.end))
+  return reservations.find(r =>
+    r.courtId === courtId && r.status !== 'cancelled' &&
+    new Date(r.startTime) < e && new Date(r.endTime) > s
+  ) ?? null
+}
+
+const COLORS: Record<SlotState, string> = {
+  free:  'bg-green-50 hover:bg-green-100 cursor-pointer',
+  mine:  'bg-blue-100 hover:bg-blue-200 cursor-pointer',
+  taken: 'bg-red-50 cursor-default',
+  past:  'bg-gray-50 cursor-default',
 }
 
 // ---------------------------------------------------------------------------
@@ -143,175 +135,111 @@ const SLOT_COLORS: Record<SlotState, string> = {
 // ---------------------------------------------------------------------------
 
 export default function ReservationGrid({
-  organizationId,
-  courts,
-  rules,
-  initialReservations,
-  initialDate,
-  maxAdvanceDays,
-  currentUserId,
+  organizationId, courts, rules, initialReservations, initialDate, maxAdvanceDays, currentUserId,
 }: Props) {
   const router = useRouter()
   const [date, setDate] = useState(initialDate)
   const [reservations, setReservations] = useState<Reservation[]>(initialReservations)
   const [dialog, setDialog] = useState<DialogData | null>(null)
-  const [activeCourt, setActiveCourt] = useState(0)  // mobile: aktuální kurt
+  const [activeCourt, setActiveCourt] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const today = pragueToday()
   const maxDate = addDays(today, maxAdvanceDays)
 
-  // -------------------------------------------------------------------
-  // Načítání rezervací při změně data (client-side)
-  // -------------------------------------------------------------------
-  const fetchReservations = useCallback(async (d: string) => {
-    const supabase = createClient()
-    // Celý den: od půlnoci do půlnoci Praha timezone
-    const dayStart = pragueToUTC(d, '00:00')
-    const dayEnd = pragueToUTC(addDays(d, 1), '00:00')
+  // Sync: server komponent se přerenderoval (router.refresh / router.push) → aktualizuj stav
+  useEffect(() => { setDate(initialDate) }, [initialDate])
+  useEffect(() => { setReservations(initialReservations) }, [initialReservations])
 
-    const { data } = await supabase
-      .from('app_court_reservations')
-      .select(`
-        id, court_id, user_id, start_time, end_time,
-        status, partner_name, note,
-        user_profiles!inner ( full_name )
-      `)
-      .eq('organization_id', organizationId)
-      .gte('start_time', dayStart)
-      .lt('start_time', dayEnd)
-      .neq('status', 'cancelled')
-
-    if (data) {
-      setReservations(data.map((r: any) => ({
-        id: r.id,
-        courtId: r.court_id,
-        userId: r.user_id,
-        startTime: r.start_time,
-        endTime: r.end_time,
-        status: r.status,
-        partnerName: r.partner_name,
-        note: r.note,
-        userFullName: r.user_profiles?.full_name ?? null,
-      })))
-    }
-  }, [organizationId])
-
-  // Při změně data: načti data
-  useEffect(() => {
-    if (date !== initialDate) {
-      fetchReservations(date)
-    }
-  }, [date, initialDate, fetchReservations])
-
-  // -------------------------------------------------------------------
-  // Supabase Realtime — živé aktualizace pro aktuální datum
-  // -------------------------------------------------------------------
+  // Realtime — při změně v DB jen refreshne server komponent
+  // Data se vrátí přes initialReservations prop (server queries přes adminClient, bez RLS problémů)
   useEffect(() => {
     const supabase = createClient()
-    const channel = supabase
-      .channel(`reservations-${organizationId}-${date}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'app_court_reservations',
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        () => {
-          // Při jakékoli změně znovu načteme data pro aktuální den
-          fetchReservations(date)
-        }
-      )
+    const ch = supabase
+      .channel(`res-${organizationId}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public',
+        table: 'app_court_reservations',
+        filter: `organization_id=eq.${organizationId}`,
+      }, () => router.refresh())
       .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [organizationId, router])
 
-    return () => { supabase.removeChannel(channel) }
-  }, [organizationId, date, fetchReservations])
-
-  // -------------------------------------------------------------------
-  // Navigace v datu
-  // -------------------------------------------------------------------
+  // Navigace data přes URL → server re-renderuje s novými daty z adminClient
   function goToDate(d: string) {
     if (d < today || d > maxDate) return
-    setDate(d)
+    setDate(d) // optimistická aktualizace
+    router.push(`/rezervace?datum=${d}`)
   }
 
-  // -------------------------------------------------------------------
-  // Klik na slot
-  // -------------------------------------------------------------------
-  function handleSlotClick(court: Court, slot: TimeSlot) {
-    const state = getSlotState(slot, court.id, date, reservations, currentUserId)
-    if (state === 'past') return
-
-    const reservation = state !== 'free'
-      ? reservations.find(r => {
-          if (r.courtId !== court.id) return false
-          const rStart = new Date(r.startTime)
-          const rEnd = new Date(r.endTime)
-          const sStart = new Date(pragueToUTC(date, slot.start))
-          const sEnd = new Date(pragueToUTC(date, slot.end))
-          return rStart < sEnd && rEnd > sStart && r.status !== 'cancelled'
-        })
-      : undefined
-
-    setDialog({
-      mode: state === 'free' ? 'create' : state === 'mine' ? 'view-mine' : 'view-taken',
-      court,
-      slot,
-      date,
-      organizationId,
-      reservation: reservation
-        ? {
-            id: reservation.id,
-            userId: reservation.userId,
-            userFullName: reservation.userFullName,
-            partnerName: reservation.partnerName,
-            note: reservation.note,
-          }
-        : undefined,
-    })
-  }
-
-  // -------------------------------------------------------------------
-  // Ruleová data pro vybraný den
-  // -------------------------------------------------------------------
-  function getRuleForCourt(courtId: string): CourtRule | undefined {
+  function getRule(courtId: string) {
     return rules.find(r => r.courtId === courtId)
   }
 
-  // Sjednocená časová osa: union všech slotů všech kurtů
-  const allSlots = courts.reduce<TimeSlot[]>((acc, court) => {
-    const rule = getRuleForCourt(court.id)
+  /** Obsazené intervaly pro kurt v lokálním HH:MM (pro výběr konce rezervace v dialogu) */
+  function getBusy(courtId: string) {
+    return reservations
+      .filter(r => r.courtId === courtId && r.status !== 'cancelled')
+      .map(r => ({ start: utcToHHMM(r.startTime), end: utcToHHMM(r.endTime) }))
+  }
+
+  function handleSlotClick(court: Court, slot: TimeSlot) {
+    const state = getSlotState(slot, court.id, date, reservations, currentUserId)
+    if (state === 'past') return
+    const rule = getRule(court.id)
+
+    if (state === 'free') {
+      setDialog({
+        mode: 'create',
+        court, date, organizationId,
+        startTime: slot.start,
+        courtTimeTo: rule?.timeTo ?? '21:00',
+        busyIntervals: getBusy(court.id),
+      })
+    } else {
+      const res = getResAtSlot(slot, court.id, date, reservations)
+      if (!res) return
+      setDialog({
+        mode: res.userId === currentUserId ? 'view-mine' : 'view-taken',
+        court, date, organizationId,
+        startTime: utcToHHMM(res.startTime),
+        endTime: utcToHHMM(res.endTime),
+        courtTimeTo: rule?.timeTo ?? '21:00',
+        busyIntervals: [],
+        reservation: {
+          id: res.id, userId: res.userId,
+          userFullName: res.userFullName,
+          partnerName: res.partnerName,
+          note: res.note,
+        },
+      })
+    }
+  }
+
+  // Sjednocená 30-min osa pro desktop grid (union přes všechny kurty)
+  const allSlots = courts.reduce<TimeSlot[]>((acc, c) => {
+    const rule = getRule(c.id)
     if (!rule) return acc
-    const slots = generateSlots(rule.timeFrom, rule.timeTo, rule.slotMinutes)
-    for (const s of slots) {
+    for (const s of gen30Slots(rule.timeFrom, rule.timeTo)) {
       if (!acc.some(a => a.start === s.start)) acc.push(s)
     }
     return acc
   }, []).sort((a, b) => a.start.localeCompare(b.start))
 
-  // -------------------------------------------------------------------
-  // Mobilní navigace kurtů (scroll-snap)
-  // -------------------------------------------------------------------
   function scrollToCourt(idx: number) {
     setActiveCourt(idx)
-    if (scrollRef.current) {
-      const child = scrollRef.current.children[idx] as HTMLElement
-      child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
-    }
+    const child = scrollRef.current?.children[idx] as HTMLElement
+    child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
   }
 
-  // -------------------------------------------------------------------
-  // Datum label
-  // -------------------------------------------------------------------
   const dateLabel = new Date(`${date}T12:00:00Z`).toLocaleDateString('cs-CZ', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    timeZone: 'Europe/Prague',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Prague',
   })
 
   return (
     <div className="flex flex-col gap-4">
+
       {/* Navigace data */}
       <div className="flex items-center justify-between">
         <button
@@ -324,14 +252,12 @@ export default function ReservationGrid({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-
         <div className="text-center">
           <p className="text-sm font-semibold text-gray-900 capitalize">{dateLabel}</p>
           {date === today && (
             <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Dnes</span>
           )}
         </div>
-
         <button
           onClick={() => goToDate(addDays(date, 1))}
           disabled={date >= maxDate}
@@ -344,11 +270,11 @@ export default function ReservationGrid({
         </button>
       </div>
 
-      {/* Mobilní: přepínač kurtů */}
+      {/* Mobilní přepínač kurtů */}
       <div className="flex gap-2 sm:hidden">
-        {courts.map((court, idx) => (
+        {courts.map((c, idx) => (
           <button
-            key={court.id}
+            key={c.id}
             onClick={() => scrollToCourt(idx)}
             className={`flex-1 rounded-lg border py-2 text-sm font-medium transition-colors ${
               activeCourt === idx
@@ -356,92 +282,90 @@ export default function ReservationGrid({
                 : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            {court.name}
+            {c.name}
           </button>
         ))}
       </div>
 
       {/* Legenda */}
       <div className="flex flex-wrap gap-3 text-xs text-gray-600">
-        <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-green-200 border border-green-300" />
-          Volno
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-blue-200 border border-blue-400" />
-          Moje rezervace
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-red-100 border border-red-200" />
-          Obsazeno
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-gray-100 border border-gray-200" />
-          Minulost
-        </span>
+        {[
+          ['bg-green-200 border-green-300', 'Volno – kliknutím vybrat čas'],
+          ['bg-blue-200 border-blue-400', 'Moje rezervace'],
+          ['bg-red-100 border-red-200', 'Obsazeno'],
+          ['bg-gray-100 border-gray-200', 'Minulost'],
+        ].map(([cls, label]) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <span className={`h-3 w-3 rounded border ${cls}`} />
+            {label}
+          </span>
+        ))}
       </div>
 
-      {/* Grid */}
+      {/* --------------- Grid --------------- */}
       <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-        {/* Záhlaví sloupců (desktop) */}
-        <div className="hidden sm:grid border-b bg-gray-50" style={{ gridTemplateColumns: `5rem repeat(${courts.length}, 1fr)` }}>
+
+        {/* Desktop: záhlaví sloupců */}
+        <div
+          className="hidden sm:grid border-b bg-gray-50"
+          style={{ gridTemplateColumns: `4.5rem repeat(${courts.length}, 1fr)` }}
+        >
           <div className="py-3 px-2" />
-          {courts.map(court => (
-            <div key={court.id} className="py-3 px-2 text-center text-sm font-semibold text-gray-700 border-l border-gray-200">
-              {court.name}
+          {courts.map(c => (
+            <div key={c.id} className="py-3 px-2 text-center text-sm font-semibold text-gray-700 border-l border-gray-200">
+              {c.name}
               <span className="ml-1 text-xs font-normal text-gray-400">
-                ({court.surface === 'clay' ? 'antuka' : court.surface === 'hard' ? 'tvrdý' : 'tráva'})
+                ({c.surface === 'clay' ? 'antuka' : c.surface === 'hard' ? 'tvrdý' : c.surface})
               </span>
             </div>
           ))}
         </div>
 
-        {/* Mobilní: horizontální scroll s snap */}
+        {/* Mobilní: horizontální scroll + snap */}
         <div
           ref={scrollRef}
           className="sm:hidden flex overflow-x-auto snap-x snap-mandatory"
           style={{ scrollbarWidth: 'none' }}
-          onScroll={(e) => {
-            const el = e.currentTarget
-            const idx = Math.round(el.scrollLeft / el.clientWidth)
+          onScroll={e => {
+            const idx = Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth)
             setActiveCourt(idx)
           }}
         >
           {courts.map(court => {
-            const rule = getRuleForCourt(court.id)
-            const slots = rule ? generateSlots(rule.timeFrom, rule.timeTo, rule.slotMinutes) : []
+            const rule = getRule(court.id)
+            const slots = rule ? gen30Slots(rule.timeFrom, rule.timeTo) : []
             return (
               <div key={court.id} className="min-w-full snap-start flex-shrink-0">
-                <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-3">
+                <div className="sticky top-0 z-10 border-b bg-gray-50 px-4 py-2.5">
                   <p className="text-sm font-semibold text-gray-700">{court.name}</p>
                 </div>
-                {slots.length === 0 && (
-                  <p className="px-4 py-6 text-sm text-gray-400">Žádná dostupná okna.</p>
-                )}
                 {slots.map(slot => {
+                  const isHour = slot.start.endsWith(':00')
                   const state = getSlotState(slot, court.id, date, reservations, currentUserId)
-                  const res = state !== 'free' && state !== 'past'
-                    ? reservations.find(r => {
-                        if (r.courtId !== court.id) return false
-                        const rStart = new Date(r.startTime)
-                        const rEnd = new Date(r.endTime)
-                        const sStart = new Date(pragueToUTC(date, slot.start))
-                        const sEnd = new Date(pragueToUTC(date, slot.end))
-                        return rStart < sEnd && rEnd > sStart
-                      })
-                    : undefined
+                  const res = getResAtSlot(slot, court.id, date, reservations)
+                  const isFirstSlot = res ? utcToHHMM(res.startTime) === slot.start : false
                   return (
                     <div
                       key={slot.start}
                       onClick={() => handleSlotClick(court, slot)}
-                      className={`flex items-center border-b border-gray-100 px-4 py-3 ${SLOT_COLORS[state]}`}
+                      className={`flex items-center px-4 ${
+                        isHour
+                          ? 'border-t border-gray-300 min-h-[2.25rem]'
+                          : 'border-t border-dashed border-gray-200 min-h-[1.5rem]'
+                      } ${COLORS[state]}`}
                     >
-                      <span className="w-16 text-sm font-mono font-medium">{slot.start}</span>
-                      <span className="flex-1 text-sm">
-                        {state === 'mine' && 'Vaše rezervace'}
-                        {state === 'taken' && (res?.userFullName ?? 'Obsazeno')}
-                        {state === 'free' && 'Volno'}
-                        {state === 'past' && ''}
+                      <span className={`w-14 font-mono shrink-0 ${
+                        isHour ? 'text-sm font-semibold text-gray-700' : 'text-xs text-gray-300'
+                      }`}>
+                        {isHour ? slot.start : ''}
+                      </span>
+                      <span className="flex-1 text-sm pl-1">
+                        {isFirstSlot && state === 'taken' && (
+                          <span className="text-red-700 text-xs">{res?.userFullName ?? 'Obsazeno'}</span>
+                        )}
+                        {isFirstSlot && state === 'mine' && (
+                          <span className="text-blue-700 text-xs font-medium">✓ Vaše rezervace</span>
+                        )}
                       </span>
                     </div>
                   )
@@ -451,62 +375,74 @@ export default function ReservationGrid({
           })}
         </div>
 
-        {/* Desktop: kompaktní grid */}
-        <div className="hidden sm:block overflow-x-auto">
-          {allSlots.map(slot => (
-            <div
-              key={slot.start}
-              className="grid border-b border-gray-100"
-              style={{ gridTemplateColumns: `5rem repeat(${courts.length}, 1fr)` }}
-            >
-              {/* Čas */}
-              <div className="py-2 px-2 text-xs font-mono text-gray-400 flex items-center">
-                {slot.start}
-              </div>
-              {/* Kurty */}
-              {courts.map(court => {
-                const rule = getRuleForCourt(court.id)
-                // Kurt tento slot nenabízí (není v jeho pravidlech)
-                const courtSlots = rule ? generateSlots(rule.timeFrom, rule.timeTo, rule.slotMinutes) : []
-                const hasSlot = courtSlots.some(s => s.start === slot.start)
-                if (!hasSlot) {
+        {/* Desktop: grid - hodiny = silná čára + popisek, půlhodiny = čárkovaná */}
+        <div className="hidden sm:block">
+          {allSlots.map(slot => {
+            const isHour = slot.start.endsWith(':00')
+            return (
+              <div
+                key={slot.start}
+                className={`grid ${
+                  isHour ? 'border-t border-gray-300' : 'border-t border-dashed border-gray-100'
+                }`}
+                style={{ gridTemplateColumns: `4.5rem repeat(${courts.length}, 1fr)` }}
+              >
+                {/* Časové popisky – pouze celé hodiny */}
+                <div className={`flex items-center justify-end pr-3 ${isHour ? 'py-2' : 'py-0.5'}`}>
+                  {isHour ? (
+                    <span className="text-xs font-semibold text-gray-600 tabular-nums">{slot.start}</span>
+                  ) : (
+                    <span className="text-[10px] text-gray-300">·</span>
+                  )}
+                </div>
+
+                {/* Buňky kurtů */}
+                {courts.map(court => {
+                  const rule = getRule(court.id)
+                  const hasSlot = rule
+                    ? gen30Slots(rule.timeFrom, rule.timeTo).some(s => s.start === slot.start)
+                    : false
+
+                  if (!hasSlot) {
+                    return (
+                      <div
+                        key={court.id}
+                        className={`border-l border-gray-100 bg-gray-50 ${isHour ? 'min-h-[2rem]' : 'min-h-[1.25rem]'}`}
+                      />
+                    )
+                  }
+
+                  const state = getSlotState(slot, court.id, date, reservations, currentUserId)
+                  const res = getResAtSlot(slot, court.id, date, reservations)
+                  const isFirstSlot = res ? utcToHHMM(res.startTime) === slot.start : false
+
                   return (
-                    <div key={court.id} className="border-l border-gray-100 bg-gray-50 py-2 px-2" />
+                    <div
+                      key={court.id}
+                      onClick={() => state !== 'past' && handleSlotClick(court, slot)}
+                      className={`border-l border-gray-100 px-2 flex items-center ${
+                        isHour ? 'min-h-[2rem]' : 'min-h-[1.25rem]'
+                      } ${COLORS[state]}`}
+                      title={
+                        state === 'free' ? `Kliknutím vybrat čas od ${slot.start}` :
+                        state === 'mine' && res ? `Vaše rezervace ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}` :
+                        state === 'taken' ? (res?.userFullName ?? 'Obsazeno') : ''
+                      }
+                    >
+                      {isFirstSlot && state === 'taken' && (
+                        <span className="text-[11px] text-red-700 truncate leading-tight">
+                          {res?.userFullName ?? 'Obsazeno'}
+                        </span>
+                      )}
+                      {isFirstSlot && state === 'mine' && (
+                        <span className="text-[11px] text-blue-700 font-semibold">✓ Moje</span>
+                      )}
+                    </div>
                   )
-                }
-                const state = getSlotState(slot, court.id, date, reservations, currentUserId)
-                const res = state !== 'free' && state !== 'past'
-                  ? reservations.find(r => {
-                      if (r.courtId !== court.id) return false
-                      const rStart = new Date(r.startTime)
-                      const rEnd = new Date(r.endTime)
-                      const sStart = new Date(pragueToUTC(date, slot.start))
-                      const sEnd = new Date(pragueToUTC(date, slot.end))
-                      return rStart < sEnd && rEnd > sStart
-                    })
-                  : undefined
-                return (
-                  <div
-                    key={court.id}
-                    onClick={() => state !== 'past' && handleSlotClick(court, slot)}
-                    className={`border-l border-gray-100 py-2 px-2 min-h-[2.5rem] text-xs ${SLOT_COLORS[state]}`}
-                    title={
-                      state === 'taken' ? (res?.userFullName ?? 'Obsazeno') :
-                      state === 'mine' ? 'Vaše rezervace' :
-                      state === 'free' ? 'Kliknout pro rezervaci' : ''
-                    }
-                  >
-                    {state === 'taken' && (
-                      <span className="truncate block">{res?.userFullName ?? 'Obsazeno'}</span>
-                    )}
-                    {state === 'mine' && (
-                      <span className="font-medium">✓ Moje</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ))}
+                })}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -515,7 +451,7 @@ export default function ReservationGrid({
         <ReservationDialog
           data={dialog}
           onClose={() => setDialog(null)}
-          onSuccess={() => fetchReservations(date)}
+          onSuccess={() => router.refresh()}
         />
       )}
     </div>

@@ -8,10 +8,12 @@ export type DialogMode = 'create' | 'view-mine' | 'view-taken'
 export type DialogData = {
   mode: DialogMode
   court: { id: string; name: string }
-  slot: { start: string; end: string }
-  date: string  // YYYY-MM-DD (Praha timezone)
+  date: string            // YYYY-MM-DD (Praha timezone)
   organizationId: string
-  // pouze pro mode 'view-mine' | 'view-taken'
+  startTime: string       // "HH:MM" – pro create: vybraný začátek; pro view: skutečný začátek
+  endTime?: string        // "HH:MM" – pouze pro view módy: skutečný konec
+  courtTimeTo: string     // "21:00" – horní limit pro výběr konce (pro create)
+  busyIntervals: Array<{ start: string; end: string }> // obsazené intervaly (HH:MM) pro tento kurt
   reservation?: {
     id: string
     userId: string
@@ -27,44 +29,85 @@ type Props = {
   onSuccess: () => void
 }
 
+function timeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+function minToTime(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+}
+
+/** Kandidáti na konec rezervace (každých 30 min od start+30 do maxEnd) */
+function computeCandidates(startTime: string, busyIntervals: Array<{start:string;end:string}>, courtTimeTo: string): string[] {
+  // Najdi první obsazený interval začínající ROVNOU nebo PO startTime
+  const firstBusy = busyIntervals
+    .filter(b => b.start > startTime)
+    .sort((a, b) => a.start.localeCompare(b.start))[0]
+
+  const maxEnd = firstBusy ? firstBusy.start : courtTimeTo
+  const maxTotal = timeToMin(maxEnd)
+  const candidates: string[] = []
+  let t = timeToMin(startTime) + 30
+  while (t <= maxTotal) {
+    candidates.push(minToTime(t))
+    t += 30
+  }
+  return candidates
+}
+
+/** Sestaví UTC timestamp z data + Praha-lokálního HH:MM */
+function buildUTCTimestamp(dateStr: string, timeStr: string): string {
+  const naive = new Date(`${dateStr}T${timeStr}:00`)
+  const tz = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Prague',
+    timeZoneName: 'shortOffset',
+  }).formatToParts(naive).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+1'
+  const match = tz.match(/GMT([+-]\d+)/)
+  const offsetHours = parseInt(match?.[1] ?? '1', 10)
+  return new Date(naive.getTime() - offsetHours * 3_600_000).toISOString()
+}
+
 export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
+  const { mode, court, date, organizationId, startTime, endTime, courtTimeTo, busyIntervals, reservation } = data
+
+  // Výběr konce rezervace (pouze v create módu)
+  const candidates = mode === 'create'
+    ? computeCandidates(startTime, busyIntervals, courtTimeTo)
+    : []
+
+  // Předvyber 2. možnost (= 1 hodina), nebo 1. pokud je jen jedna
+  const defaultEnd = candidates[1] ?? candidates[0] ?? null
+  const [selectedEnd, setSelectedEnd] = useState<string | null>(defaultEnd)
+
   const [partnerName, setPartnerName] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const { mode, court, slot, date, organizationId, reservation } = data
+  // Datum v čitelném formátu
+  const dateFormatted = new Date(`${date}T12:00:00Z`).toLocaleDateString('cs-CZ', {
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Prague',
+  })
 
-  // Sestavení UTC timestampů z datum + čas (Praha timezone)
-  // Předpoklad: klient je v CZ timezone — pro spolehlivost použijeme Intl offset
-  function buildUTCTimestamp(dateStr: string, timeStr: string): string {
-    // Zjistit offset pro Praha timezone v daný čas
-    const naive = new Date(`${dateStr}T${timeStr}:00`)
-    const pragueParts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Prague',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false,
-    }).formatToParts(naive)
-    const tz = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Europe/Prague',
-      timeZoneName: 'shortOffset',
-    }).formatToParts(naive).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+1'
-
-    const match = tz.match(/GMT([+-]\d+)/)
-    const offsetHours = parseInt(match?.[1] ?? '1', 10)
-    const utc = new Date(naive.getTime() - offsetHours * 3600 * 1000)
-    return utc.toISOString()
-  }
+  // Čas zobrazený v hlavičce
+  const headerTime =
+    mode === 'create'
+      ? selectedEnd ? `${startTime} – ${selectedEnd}` : `od ${startTime}`
+      : `${startTime} – ${endTime}`
 
   function handleCreate() {
+    if (!selectedEnd) {
+      setError('Vyberte čas do kdy chcete rezervovat.')
+      return
+    }
     setError(null)
     startTransition(async () => {
       const result = await createReservation({
         courtId: court.id,
         organizationId,
-        startTimeISO: buildUTCTimestamp(date, slot.start),
-        endTimeISO: buildUTCTimestamp(date, slot.end),
+        startTimeISO: buildUTCTimestamp(date, startTime),
+        endTimeISO: buildUTCTimestamp(date, selectedEnd),
         partnerName: partnerName || undefined,
         note: note || undefined,
       })
@@ -91,29 +134,25 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
     })
   }
 
-  // Datum v čitelném formátu
-  const dateFormatted = new Date(`${date}T12:00:00`).toLocaleDateString('cs-CZ', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  })
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+
         {/* Hlavička */}
         <div className="flex items-start justify-between border-b px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">{court.name}</h2>
             <p className="text-sm text-gray-500 capitalize">{dateFormatted}</p>
-            <p className="mt-0.5 text-base font-medium text-gray-700">
-              {slot.start} – {slot.end}
+            <p className={`mt-0.5 text-base font-medium ${mode === 'create' && !selectedEnd ? 'text-gray-400' : 'text-gray-800'}`}>
+              {headerTime}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="ml-4 text-gray-400 hover:text-gray-600"
+            className="ml-4 mt-1 text-gray-400 hover:text-gray-600"
             aria-label="Zavřít"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -123,14 +162,51 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
         </div>
 
         {/* Obsah */}
-        <div className="px-6 py-4">
-          {mode === 'create' && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">Vytvořit rezervaci na tento termín?</p>
+        <div className="px-6 py-4 space-y-4">
 
+          {/* ---- CREATE: výběr konce + formulář ---- */}
+          {mode === 'create' && (
+            <>
+              {/* Výběr konce rezervace */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Do kdy chcete hrát?</p>
+                {candidates.length === 0 ? (
+                  <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                    Žádný volný čas od {startTime} — kurt je plně obsazený.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {candidates.map(end => {
+                      const durationMin = timeToMin(end) - timeToMin(startTime)
+                      const durationLabel = durationMin >= 60
+                        ? `${Math.floor(durationMin / 60)}h${durationMin % 60 ? durationMin % 60 + 'min' : ''}`
+                        : `${durationMin} min`
+                      const isSelected = selectedEnd === end
+                      return (
+                        <button
+                          key={end}
+                          onClick={() => setSelectedEnd(end)}
+                          className={`rounded-xl py-2.5 px-2 text-center transition-all border ${
+                            isSelected
+                              ? 'bg-green-600 text-white border-green-600 shadow-md ring-2 ring-green-300'
+                              : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-green-50 hover:border-green-300'
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold">{end}</span>
+                          <span className={`block text-xs mt-0.5 ${isSelected ? 'text-green-100' : 'text-gray-400'}`}>
+                            {durationLabel}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Spoluhráč */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Spoluhráč (nepovinné)
+                  Spoluhráč <span className="font-normal text-gray-400">(nepovinné)</span>
                 </label>
                 <input
                   type="text"
@@ -142,14 +218,15 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                 />
               </div>
 
+              {/* Poznámka */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Poznámka (nepovinné)
+                  Poznámka <span className="font-normal text-gray-400">(nepovinné)</span>
                 </label>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Trénink, turnaj, ..."
+                  placeholder="Trénink, přátelská, ..."
                   rows={2}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 resize-none"
                   maxLength={300}
@@ -169,25 +246,22 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                 </button>
                 <button
                   onClick={handleCreate}
-                  disabled={isPending}
-                  className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                  disabled={isPending || !selectedEnd || candidates.length === 0}
+                  className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isPending ? 'Ukládám...' : 'Rezervovat'}
+                  {isPending ? 'Ukládám…' : selectedEnd ? `Rezervovat do ${selectedEnd}` : 'Vyberte čas'}
                 </button>
               </div>
-            </div>
+            </>
           )}
 
+          {/* ---- VIEW-MINE: zobrazení vlastní rezervace ---- */}
           {mode === 'view-mine' && reservation && (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <>
+              <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 space-y-1">
                 <p className="font-medium">Vaše rezervace</p>
-                {reservation.partnerName && (
-                  <p className="mt-1">Spoluhráč: {reservation.partnerName}</p>
-                )}
-                {reservation.note && (
-                  <p className="mt-1">Poznámka: {reservation.note}</p>
-                )}
+                {reservation.partnerName && <p>Spoluhráč: {reservation.partnerName}</p>}
+                {reservation.note && <p>Poznámka: {reservation.note}</p>}
               </div>
 
               {error && (
@@ -206,20 +280,18 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                   disabled={isPending}
                   className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 >
-                  {isPending ? 'Ruším...' : 'Zrušit rezervaci'}
+                  {isPending ? 'Ruším…' : 'Zrušit rezervaci'}
                 </button>
               </div>
-            </div>
+            </>
           )}
 
+          {/* ---- VIEW-TAKEN: zobrazení cizí rezervace ---- */}
           {mode === 'view-taken' && reservation && (
-            <div className="space-y-4">
-              <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <>
+              <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 space-y-1">
                 <p className="font-medium">Obsazeno</p>
-                <p className="mt-1">
-                  {reservation.userFullName ?? 'Člen klubu'}
-                  {reservation.partnerName && ` + ${reservation.partnerName}`}
-                </p>
+                {reservation.userFullName && <p>Hráč: {reservation.userFullName}</p>}
               </div>
 
               <button
@@ -228,8 +300,9 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
               >
                 Zavřít
               </button>
-            </div>
+            </>
           )}
+
         </div>
       </div>
     </div>
