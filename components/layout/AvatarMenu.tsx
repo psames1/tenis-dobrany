@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import { User, Settings, LogOut } from 'lucide-react'
+import { User, Settings, LogOut, CalendarCheck } from 'lucide-react'
 
 export type AvatarUser = {
   email: string
@@ -64,6 +64,14 @@ export function AvatarMenu({ email, fullName, avatarUrl, role }: AvatarUser) {
 
           {/* Links */}
           <div className="py-1">
+            <Link
+              href="/rezervace"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:text-green-700 hover:bg-green-50 transition-colors"
+            >
+              <CalendarCheck size={15} />
+              Rezervace kurtů
+            </Link>
             <Link
               href="/clenove/profil"
               onClick={() => setOpen(false)}

@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { User, BookOpen, Settings } from 'lucide-react'
+import { User, BookOpen, Settings, CalendarCheck } from 'lucide-react'
 
 export default async function MemberLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -40,6 +40,13 @@ export default async function MemberLayout({ children }: { children: React.React
               >
                 <BookOpen size={14} />
                 Přehled
+              </Link>
+              <Link
+                href="/rezervace"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+              >
+                <CalendarCheck size={14} />
+                Rezervace
               </Link>
               <Link
                 href="/clenove/profil"

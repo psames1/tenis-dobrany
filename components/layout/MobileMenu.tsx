@@ -67,6 +67,13 @@ export function MobileMenu({ items, user }: Props) {
                     {user.fullName ?? user.email}
                   </div>
                   <Link
+                    href="/rezervace"
+                    onClick={() => setIsOpen(false)}
+                    className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
+                  >
+                    Rezervace kurtů
+                  </Link>
+                  <Link
                     href="/clenove/profil"
                     onClick={() => setIsOpen(false)}
                     className="block px-3 py-2.5 rounded-md text-sm font-medium text-gray-600 hover:text-green-700 hover:bg-green-50 transition-colors"
