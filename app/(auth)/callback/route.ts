@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * GET /callback
@@ -87,6 +88,39 @@ export async function GET(request: Request) {
         console.warn('[callback] user blocked (no profile or inactive):', user.email)
         await supabase.auth.signOut()
         return NextResponse.redirect(new URL('/login?error=uninvited', origin))
+      }
+
+      // Auto-enroll uživatele do organizace podle subdomény (pokud ještě není členem)
+      try {
+        const headersList = await headers()
+        const orgSlug = headersList.get('x-org-slug')
+        if (orgSlug) {
+          const adminClient = createAdminClient()
+          const { data: org } = await adminClient
+            .from('app_organizations')
+            .select('id')
+            .eq('slug', orgSlug)
+            .eq('is_active', true)
+            .single()
+          if (org) {
+            // ignoreDuplicates: true = při konfliktu (user_id, org) nic nezmění (zachová vyšší roli)
+            await adminClient
+              .from('app_organization_members')
+              .upsert(
+                { organization_id: org.id, user_id: user.id, role: 'player', is_active: true },
+                { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
+              )
+            // Nastav default_organization_id, pokud ještě není
+            await adminClient
+              .from('user_profiles')
+              .update({ default_organization_id: org.id })
+              .eq('id', user.id)
+              .is('default_organization_id', null)
+          }
+        }
+      } catch (enrollError) {
+        // Logovat ale nepřerušit — přihlášení proběhne i bez auto-enrollu
+        console.warn('[callback] auto-enroll error:', enrollError)
       }
     }
 
