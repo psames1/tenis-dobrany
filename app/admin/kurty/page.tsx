@@ -40,7 +40,7 @@ export default async function AdminKurtyPage() {
   const { data: rules } = courtIds.length
     ? await supabase
         .from('app_court_reservation_rules')
-        .select('court_id, time_from, time_to, slot_minutes, price_member, price_guest, max_advance_days')
+        .select('court_id, time_from, time_to, slot_minutes, price_member, price_guest, max_advance_days, max_duration_minutes, min_gap_minutes, max_per_week, require_partner')
         .in('court_id', courtIds)
         .is('valid_to', null)
     : { data: [] }

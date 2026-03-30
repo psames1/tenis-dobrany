@@ -92,6 +92,11 @@ export async function updateCourtRule(courtId: string, formData: FormData) {
   const priceMember = parseFloat(String(formData.get('price_member') ?? '0'))
   const priceGuest = parseFloat(String(formData.get('price_guest') ?? '0'))
   const maxAdvanceDays = parseInt(String(formData.get('max_advance_days') ?? '14'), 10)
+  const maxDurationMinutes = parseInt(String(formData.get('max_duration_minutes') ?? '120'), 10)
+  const minGapMinutes = parseInt(String(formData.get('min_gap_minutes') ?? '0'), 10)
+  const maxPerWeekRaw = formData.get('max_per_week')
+  const maxPerWeek = maxPerWeekRaw ? parseInt(String(maxPerWeekRaw), 10) : null
+  const requirePartner = formData.get('require_partner') === 'on'
 
   if (![30, 60, 90, 120].includes(slotMinutes)) return { error: 'Neplatná délka slotu.' }
 
@@ -115,6 +120,10 @@ export async function updateCourtRule(courtId: string, formData: FormData) {
       max_advance_days: maxAdvanceDays,
       min_advance_minutes: 0,
       requires_approval: false,
+      max_duration_minutes: maxDurationMinutes,
+      min_gap_minutes: minGapMinutes,
+      max_per_week: maxPerWeek,
+      require_partner: requirePartner,
     })
 
   if (error) return { error: 'Nepodařilo se uložit pravidlo.' }

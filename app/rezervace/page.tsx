@@ -17,15 +17,15 @@ function addDays(dateStr: string, days: number): string {
 }
 
 // Převod lokálního data + čas (Praha) na UTC ISO
+// Používáme Z aby bylo chování konzistentní bez ohledu na TZ serveru/prohlížeče
 function pragueToUTC(dateStr: string, timeStr: string): string {
-  const naive = new Date(`${dateStr}T${timeStr}:00`)
+  const probe = new Date(`${dateStr}T${timeStr}:00Z`) // interpret as UTC first
   const tz = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Prague',
     timeZoneName: 'shortOffset',
-  }).formatToParts(naive).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+1'
-  const match = tz.match(/GMT([+-]\d+)/)
-  const offsetH = parseInt(match?.[1] ?? '1', 10)
-  return new Date(naive.getTime() - offsetH * 3600 * 1000).toISOString()
+  }).formatToParts(probe).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+2'
+  const offsetH = parseInt(tz.match(/GMT([+-]\d+)/)?.[1] ?? '2', 10)
+  return new Date(probe.getTime() - offsetH * 3_600_000).toISOString()
 }
 
 type PageProps = {
@@ -102,7 +102,7 @@ export default async function RezervacePage({ searchParams }: PageProps) {
   // Načíst pravidla rezervací — platná pro vybraný datum (admin klient)
   const { data: rulesRaw } = await admin
     .from('app_court_reservation_rules')
-    .select('court_id, time_from, time_to, slot_minutes, price_member, price_guest, max_advance_days')
+    .select('court_id, time_from, time_to, slot_minutes, price_member, price_guest, max_advance_days, max_duration_minutes, min_gap_minutes, max_per_week, require_partner')
     .in('court_id', courtIds)
     .lte('valid_from', date)
     .or('valid_to.is.null,valid_to.gte.' + date)
@@ -120,6 +120,10 @@ export default async function RezervacePage({ searchParams }: PageProps) {
         priceMember: r.price_member,
         priceGuest: r.price_guest,
         maxAdvanceDays: r.max_advance_days,
+        maxDurationMinutes: r.max_duration_minutes ?? 120,
+        minGapMinutes: r.min_gap_minutes ?? 0,
+        maxPerWeek: r.max_per_week ?? null,
+        requirePartner: r.require_partner ?? false,
       })
     }
   }
@@ -159,6 +163,22 @@ export default async function RezervacePage({ searchParams }: PageProps) {
     userFullName: r.user_profiles?.full_name ?? null,
   }))
 
+  // Načíst členy organizace pro napovínací výběr spoluháče
+  const { data: membersRaw } = await admin
+    .from('app_organization_members')
+    .select('user_id, user_profiles(id, full_name)')
+    .eq('organization_id', org.id)
+    .eq('is_active', true)
+
+  const orgMembers: { id: string; fullName: string }[] = []
+  for (const m of (membersRaw ?? [])) {
+    const p = (m as any).user_profiles
+    if (p?.full_name && p.id !== user.id) {
+      orgMembers.push({ id: p.id, fullName: p.full_name })
+    }
+  }
+  orgMembers.sort((a, b) => a.fullName.localeCompare(b.fullName, 'cs'))
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       <div className="mb-6">
@@ -174,6 +194,7 @@ export default async function RezervacePage({ searchParams }: PageProps) {
         initialDate={date}
         maxAdvanceDays={maxAdvanceDays}
         currentUserId={user.id}
+        orgMembers={orgMembers}
       />
     </div>
   )

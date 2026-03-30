@@ -12,6 +12,10 @@ type CourtRule = {
   price_member: number
   price_guest: number
   max_advance_days: number
+  max_duration_minutes: number
+  min_gap_minutes: number
+  max_per_week: number | null
+  require_partner: boolean
 } | null
 
 type Court = {
@@ -141,7 +145,7 @@ export default function CourtManagement({
             {/* Stav pravidel */}
             {court.rule && expandedRule !== court.id && (
               <div className="px-5 pb-3 text-xs text-gray-400">
-                {court.rule.time_from}–{court.rule.time_to} · {court.rule.slot_minutes} min · člen {court.rule.price_member} Kč · host {court.rule.price_guest} Kč · max {court.rule.max_advance_days} dní
+                {court.rule.time_from}–{court.rule.time_to} · slot {court.rule.slot_minutes} min · max {Math.floor((court.rule.max_duration_minutes ?? 120) / 60)}h · člen {court.rule.price_member} Kč · host {court.rule.price_guest} Kč · max {court.rule.max_advance_days} dní
               </div>
             )}
 
@@ -217,6 +221,58 @@ export default function CourtManagement({
                     step={10}
                     className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
                   />
+                </div>
+                <div className="col-span-2 border-t border-gray-200 mt-1 pt-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Rozšířená pravidla</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Max. délka (min)</label>
+                      <input
+                        type="number"
+                        name="max_duration_minutes"
+                        defaultValue={(court.rule as any)?.max_duration_minutes ?? 120}
+                        min={30}
+                        max={480}
+                        step={30}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Min. odstup (min)</label>
+                      <input
+                        type="number"
+                        name="min_gap_minutes"
+                        defaultValue={(court.rule as any)?.min_gap_minutes ?? 0}
+                        min={0}
+                        max={1440}
+                        step={15}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Max. rezervací/týden</label>
+                      <input
+                        type="number"
+                        name="max_per_week"
+                        defaultValue={(court.rule as any)?.max_per_week ?? ''}
+                        min={1}
+                        max={21}
+                        placeholder="bez limitu"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex items-end pb-1">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="require_partner"
+                          defaultChecked={(court.rule as any)?.require_partner ?? false}
+                          className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
+                        <span className="text-xs font-medium text-gray-600">Vyžadovat spoluhráče</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
                 <div className="col-span-2 flex justify-end gap-2 pt-1">
                   <button
