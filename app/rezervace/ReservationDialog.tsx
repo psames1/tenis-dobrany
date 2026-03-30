@@ -14,15 +14,21 @@ export type DialogMode = 'create' | 'view-mine' | 'view-taken'
 export type DialogData = {
   mode: DialogMode
   court: { id: string; name: string }
-  date: string            // YYYY-MM-DD (Praha timezone)
+  date: string            // YYYY-MM-DD
   organizationId: string
-  startTime: string       // "HH:MM" – vybraný / skutečný začátek
-  endTime?: string        // "HH:MM" – pouze pro view módy
+  startTime: string       // "HH:MM"
+  endTime?: string        // "HH:MM" – pouze view módy
   courtTimeFrom: string   // "07:00"
   courtTimeTo: string     // "21:00"
   maxDurationMinutes: number
   requirePartner: boolean
-  busyIntervals: Array<{ start: string; end: string }>  // obsazené intervaly kurtu
+  /** Obsazené intervaly kurtu pro daný den */
+  busyIntervals: Array<{
+    start: string        // "HH:MM"
+    end: string          // "HH:MM"
+    userName?: string | null
+    isOwn?: boolean
+  }>
   orgMembers: OrgMember[]
   reservation?: {
     id: string
@@ -43,6 +49,7 @@ function timeToMin(t: string) {
   const [h, m] = t.split(':').map(Number)
   return h * 60 + m
 }
+
 function minToTime(t: number) {
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
 }
@@ -58,18 +65,14 @@ function gen30Slots(from: string, to: string) {
   return slots
 }
 
-/** Bezpečná UTC konverze nezávislá na timezone prostředí:
- *  Vstupy jsou stringy "YYYY-MM-DD" a "HH:MM" vyjadřující Praha local time.
- *  Výstup: ISO UTC string */
+/** Praha local time → UTC ISO string (Z trick pro správný offset) */
 function toUTC(dateStr: string, timeStr: string): string {
-  // Append Z so the Date object is constructed as UTC, then get the Prague offset for that moment
   const probe = new Date(`${dateStr}T${timeStr}:00Z`)
   const tz = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Prague',
     timeZoneName: 'shortOffset',
   }).formatToParts(probe).find(p => p.type === 'timeZoneName')?.value ?? 'GMT+2'
   const off = parseInt(tz.match(/GMT([+-]\d+)/)?.[1] ?? '2', 10)
-  // Praha = UTC+off → UTC = Praha - off
   return new Date(probe.getTime() - off * 3_600_000).toISOString()
 }
 
@@ -98,10 +101,11 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // === Časové okno mini-gridu ===
-  const windowFrom = minToTime(Math.max(timeToMin(courtTimeFrom), timeToMin(initialStart) - 60))
-  const windowTo   = minToTime(Math.min(timeToMin(courtTimeTo), timeToMin(initialStart) + maxDurationMinutes + 60))
-  const slots = useMemo(() => gen30Slots(windowFrom, windowTo), [windowFrom, windowTo])
+  // === Sloty = celý provozní čas kurtu ===
+  const slots = useMemo(
+    () => gen30Slots(courtTimeFrom, courtTimeTo),
+    [courtTimeFrom, courtTimeTo]
+  )
 
   // === Autocomplete spoluhráče ===
   const suggestions = useMemo(() => {
@@ -110,9 +114,9 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
     return orgMembers.filter(m => m.fullName.toLowerCase().includes(q)).slice(0, 6)
   }, [partnerQuery, orgMembers])
 
-  // === Stav slotů ===
-  function isOccupied(slot: { start: string; end: string }) {
-    return busyIntervals.some(b => b.start < slot.end && b.end > slot.start)
+  // === Helpers ===
+  function getBusyAt(slot: { start: string; end: string }) {
+    return busyIntervals.find(b => b.start < slot.end && b.end > slot.start) ?? null
   }
 
   function hasBusyBetween(from: string, to: string) {
@@ -125,23 +129,30 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
   }
 
   function handleSlotClick(slot: { start: string; end: string }) {
-    if (isOccupied(slot)) return
+    const busy = getBusyAt(slot)
+    if (busy) return  // obsazený slot není klikatelný
 
-    if (slot.start < selStart) {
-      // Posunout začátek dříve
-      if (hasBusyBetween(slot.start, selStart)) return
+    // Pokud je výběr kompletní (start+end), klik kamkoliv = nový výběr
+    if (selEnd !== null) {
       setSelStart(slot.start)
-      if (selEnd && hasBusyBetween(slot.start, selEnd)) setSelEnd(null)
-      return
-    }
-
-    if (slot.start === selStart) {
-      // Klik na začátek – resetovat výběr
       setSelEnd(null)
       return
     }
 
-    // Klik za začátek – nastavit konec
+    // Výběr startu ještě není potvrzen koncem
+    if (slot.start < selStart) {
+      // Posunout start dříve
+      if (hasBusyBetween(slot.start, selStart)) return
+      setSelStart(slot.start)
+      return
+    }
+
+    if (slot.start === selStart) {
+      // Klik na start znovu = čekáme na konec (nic)
+      return
+    }
+
+    // Nastavit konec — dur <= maxDurationMinutes (= včetně limitu)
     if (hasBusyBetween(selStart, slot.end)) return
     const dur = timeToMin(slot.end) - timeToMin(selStart)
     if (dur > maxDurationMinutes) return
@@ -149,17 +160,23 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
   }
 
   const durationMin = selEnd ? timeToMin(selEnd) - timeToMin(selStart) : 0
-  const durationLabel = durationMin
-    ? `${Math.floor(durationMin / 60) > 0 ? Math.floor(durationMin / 60) + 'h ' : ''}${durationMin % 60 ? durationMin % 60 + 'min' : ''}`.trim()
-    : ''
+  const durationLabel = (() => {
+    if (!durationMin) return ''
+    const h = Math.floor(durationMin / 60)
+    const m = durationMin % 60
+    return `${h > 0 ? h + 'h' : ''}${h > 0 && m > 0 ? ' ' : ''}${m > 0 ? m + ' min' : ''}`
+  })()
 
   const dateFormatted = new Date(`${date}T12:00:00Z`).toLocaleDateString('cs-CZ', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Prague',
   })
 
   function handleCreate() {
-    if (!selEnd) { setError('Klikněte na slot v gridu níže pro výběr konce rezervace.'); return }
-    if (requirePartner && !partnerName.trim()) { setError('Vyplňte jméno spoluhráče — je to povinné pro tento kurt.'); return }
+    if (!selEnd) { setError('Vyberte konec rezervace kliknutím na slot.'); return }
+    if (requirePartner && !partnerName.trim()) {
+      setError('Vyplňte jméno spoluhráče — je to povinné pro tento kurt.')
+      return
+    }
     setError(null)
     startTransition(async () => {
       const result = await createReservation({
@@ -198,7 +215,9 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
             <p className="text-xs text-gray-400 capitalize">{dateFormatted}</p>
             <p className="text-base font-bold text-gray-800 mt-0.5">
               {mode === 'create'
-                ? selEnd ? `${selStart} – ${selEnd}` : `od ${selStart}`
+                ? selEnd
+                  ? `${selStart} – ${selEnd}`
+                  : `od ${selStart} → vyberte konec`
                 : `${data.startTime} – ${viewEnd}`}
               {durationLabel && mode === 'create' && (
                 <span className="text-sm font-normal text-gray-400 ml-2">{durationLabel}</span>
@@ -220,14 +239,19 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
             {/* Spoluhráč */}
             <div className="relative">
               <label className="block text-xs font-medium text-gray-600 mb-1">
-                Spoluhráč {requirePartner
+                Spoluhráč{' '}
+                {requirePartner
                   ? <span className="text-red-500 font-normal">*povinné</span>
                   : <span className="text-gray-400 font-normal">(nepovinné)</span>}
               </label>
               <input
                 type="text"
                 value={partnerQuery}
-                onChange={e => { setPartnerQuery(e.target.value); setPartnerName(e.target.value); setShowSugg(true) }}
+                onChange={e => {
+                  setPartnerQuery(e.target.value)
+                  setPartnerName(e.target.value)
+                  setShowSugg(true)
+                }}
                 onFocus={() => setShowSugg(true)}
                 onBlur={() => setTimeout(() => setShowSugg(false), 150)}
                 placeholder="Začněte psát jméno…"
@@ -240,7 +264,11 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                     <button
                       key={m.id}
                       className="w-full text-left px-3 py-2.5 text-sm hover:bg-green-50 hover:text-green-800 border-b border-gray-50 last:border-0"
-                      onClick={() => { setPartnerName(m.fullName); setPartnerQuery(m.fullName); setShowSugg(false) }}
+                      onClick={() => {
+                        setPartnerName(m.fullName)
+                        setPartnerQuery(m.fullName)
+                        setShowSugg(false)
+                      }}
                     >
                       {m.fullName}
                     </button>
@@ -264,68 +292,106 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
               />
             </div>
 
-            {/* Mini grid pro výběr času */}
+            {/* Mini grid — celý den kurtu */}
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-2">
-                Vyberte čas — klikněte na začátek a poté na konec rezervace
+              <p className="text-xs font-medium text-gray-600 mb-1">
+                {selEnd
+                  ? 'Klikněte kamkoliv pro nový výběr'
+                  : selStart
+                  ? 'Klikněte na konec rezervace ↓'
+                  : 'Klikněte na začátek rezervace ↓'}
               </p>
+              {maxDurationMinutes < 600 && (
+                <p className="text-xs text-gray-400 mb-2">
+                  Max. délka:{' '}
+                  {maxDurationMinutes >= 60
+                    ? Math.floor(maxDurationMinutes / 60) + 'h'
+                    : ''
+                  }{maxDurationMinutes % 60 ? ' ' + maxDurationMinutes % 60 + ' min' : ''}
+                </p>
+              )}
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 {slots.map(slot => {
-                  const occupied = isOccupied(slot)
+                  const busy = getBusyAt(slot)
+                  const occupied = busy !== null
                   const inSel = inSelection(slot)
-                  const isStart = slot.start === selStart
-                  const isEnd = Boolean(selEnd && slot.end === selEnd)
+                  const isSelStart = slot.start === selStart
+                  const isSelEnd = Boolean(selEnd && slot.end === selEnd)
                   const isHour = slot.start.endsWith(':00')
+                  const isFirstBusy = occupied && busy!.start === slot.start
 
-                  // Přes limit délky
-                  const overMax = !occupied && !inSel && slot.start > selStart &&
+                  // Přes limit délky (exkluzivní: dur > maxDuration znamená nelze kliknout)
+                  const overMax = !occupied && !inSel && selEnd === null &&
+                    slot.start > selStart &&
                     (timeToMin(slot.end) - timeToMin(selStart)) > maxDurationMinutes
 
-                  // Obsazeno v cestě
-                  const blockedPath = !occupied && !inSel && !overMax && slot.start > selStart &&
+                  // Blokováno obsazeným slotem v cestě
+                  const blockedPath = !occupied && !inSel && !overMax &&
+                    selEnd === null && slot.start > selStart &&
                     hasBusyBetween(selStart, slot.end)
 
-                  const notClickable = occupied || overMax || blockedPath
+                  const notClickable = occupied
 
-                  // Barva buňky
                   let cellClass = ''
-                  if (occupied) cellClass = 'bg-red-50'
-                  else if (inSel) cellClass = isStart || isEnd ? 'bg-green-500' : 'bg-green-400'
-                  else if (overMax || blockedPath) cellClass = 'bg-gray-50 opacity-40'
-                  else cellClass = 'bg-white hover:bg-green-50'
+                  if (occupied) {
+                    cellClass = busy!.isOwn ? 'bg-blue-100' : 'bg-red-50'
+                  } else if (inSel) {
+                    cellClass = isSelStart || isSelEnd ? 'bg-green-500' : 'bg-green-400'
+                  } else if (overMax || blockedPath) {
+                    cellClass = 'bg-gray-50 opacity-50'
+                  } else {
+                    cellClass = 'bg-white hover:bg-green-50'
+                  }
 
                   return (
                     <div
                       key={slot.start}
                       onClick={() => !notClickable && handleSlotClick(slot)}
-                      className={`flex items-center px-3 select-none ${
-                        isHour ? 'border-t border-gray-300 min-h-[2.25rem]' : 'border-t border-dashed border-gray-100 min-h-[1.5rem]'
-                      } ${cellClass} ${notClickable ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                      className={[
+                        'flex items-center px-3 select-none h-[1.875rem]',
+                        isHour ? 'border-t border-gray-300' : 'border-t border-dashed border-gray-100',
+                        cellClass,
+                        notClickable ? 'cursor-default' : 'cursor-pointer',
+                      ].join(' ')}
                     >
-                      {/* Čas — jen celé hodiny */}
-                      <span className={`w-12 font-mono text-xs shrink-0 ${
-                        inSel ? 'text-white font-semibold' : isHour ? 'text-gray-600' : 'text-gray-200'
-                      }`}>
-                        {isHour || isStart || isEnd ? slot.start : ''}
+                      {/* Čas */}
+                      <span className={[
+                        'w-12 font-mono text-xs shrink-0',
+                        inSel && !occupied ? 'text-white font-semibold' :
+                        isHour ? 'text-gray-600 font-semibold' : 'text-gray-300',
+                      ].join(' ')}>
+                        {isHour ? slot.start : (isSelStart || isSelEnd ? slot.start : '')}
                       </span>
 
-                      {/* Label */}
-                      <span className={`flex-1 pl-1 text-xs ${inSel ? 'text-white' : 'text-gray-400'}`}>
-                        {occupied && isHour && 'Obsazeno'}
-                        {isStart && !selEnd && <span className="text-green-700 font-medium">← začátek</span>}
-                        {isEnd && <span className="font-semibold">konec</span>}
-                        {overMax && isHour && <span className="text-gray-400">max {Math.floor(maxDurationMinutes / 60)}h</span>}
+                      {/* Popisek */}
+                      <span className="flex-1 pl-1 text-xs leading-tight truncate">
+                        {isFirstBusy && busy!.isOwn && (
+                          <span className="text-blue-700 font-medium">
+                            ✓ Vaše: {busy!.start}–{busy!.end}
+                          </span>
+                        )}
+                        {isFirstBusy && !busy!.isOwn && (
+                          <span className="text-red-600">
+                            {busy!.userName ?? 'Obsazeno'} ({busy!.start}–{busy!.end})
+                          </span>
+                        )}
+                        {!occupied && isSelStart && !selEnd && (
+                          <span className="text-green-700 font-medium">← začátek</span>
+                        )}
+                        {!occupied && isSelStart && Boolean(selEnd) && (
+                          <span className="text-white text-[11px]">start</span>
+                        )}
+                        {!occupied && isSelEnd && (
+                          <span className="text-white text-[11px] font-semibold">konec ✓</span>
+                        )}
+                        {overMax && (
+                          <span className="text-gray-300 text-[11px]">nad limit</span>
+                        )}
                       </span>
                     </div>
                   )
                 })}
               </div>
-              {maxDurationMinutes < 600 && (
-                <p className="text-xs text-gray-400 mt-1 text-right">
-                  Max. délka rezervace: {maxDurationMinutes >= 60 ? Math.floor(maxDurationMinutes / 60) + ' h' : maxDurationMinutes + ' min'}
-                  {maxDurationMinutes % 60 !== 0 ? ' ' + (maxDurationMinutes % 60) + ' min' : ''}
-                </p>
-              )}
             </div>
 
             {error && (
@@ -344,7 +410,7 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                 disabled={isPending || !selEnd}
                 className="flex-1 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isPending ? 'Ukládám…' : selEnd ? `Rezervovat` : 'Vyberte čas'}
+                {isPending ? 'Ukládám…' : selEnd ? 'Rezervovat' : 'Vyberte čas'}
               </button>
             </div>
           </>)}
@@ -354,15 +420,26 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
             <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 space-y-1">
               <p className="font-semibold">Vaše rezervace</p>
               <p className="text-blue-600">{data.startTime} – {viewEnd}</p>
-              {reservation.partnerName && <p>Spoluhráč: <span className="font-medium">{reservation.partnerName}</span></p>}
+              {reservation.partnerName && (
+                <p>Spoluhráč: <span className="font-medium">{reservation.partnerName}</span></p>
+              )}
               {reservation.note && <p>Poznámka: {reservation.note}</p>}
             </div>
-            {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            )}
             <div className="flex gap-3">
-              <button onClick={onClose} className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
                 Zavřít
               </button>
-              <button onClick={handleCancel} disabled={isPending} className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+              <button
+                onClick={handleCancel}
+                disabled={isPending}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
                 {isPending ? 'Ruším…' : 'Zrušit rezervaci'}
               </button>
             </div>
@@ -375,7 +452,10 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
               <p className="text-red-600">{data.startTime} – {viewEnd}</p>
               {reservation.userFullName && <p>Hráč: {reservation.userFullName}</p>}
             </div>
-            <button onClick={onClose} className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <button
+              onClick={onClose}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
               Zavřít
             </button>
           </>)}

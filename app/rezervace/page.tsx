@@ -138,18 +138,31 @@ export default async function RezervacePage({ searchParams }: PageProps) {
   const dayStart = pragueToUTC(date, '00:00')
   const dayEnd = pragueToUTC(addDays(date, 1), '00:00')
 
-  const { data: reservationsRaw } = await admin
+  const { data: reservationsRaw, error: resError } = await admin
     .from('app_court_reservations')
-    .select(`
-      id, court_id, user_id, start_time, end_time,
-      status, partner_name, note,
-      user_profiles ( full_name )
-    `)
+    .select('id, court_id, user_id, start_time, end_time, status, partner_name, note')
     .eq('organization_id', org.id)
     .in('court_id', courtIds)
     .gte('start_time', dayStart)
     .lt('start_time', dayEnd)
     .neq('status', 'cancelled')
+
+  if (resError) {
+    console.error('[rezervace] reservations query error:', resError)
+  }
+
+  // Načíst jména uživatelů zvlášť (bezpečnější než JOIN přes RLS)
+  const userIds = [...new Set((reservationsRaw ?? []).map((r: any) => r.user_id))]
+  const profilesMap = new Map<string, string>()
+  if (userIds.length > 0) {
+    const { data: profiles } = await admin
+      .from('user_profiles')
+      .select('id, full_name')
+      .in('id', userIds)
+    for (const p of (profiles ?? [])) {
+      profilesMap.set(p.id, p.full_name ?? '')
+    }
+  }
 
   const reservations: Reservation[] = (reservationsRaw ?? []).map((r: any) => ({
     id: r.id,
@@ -160,7 +173,7 @@ export default async function RezervacePage({ searchParams }: PageProps) {
     status: r.status,
     partnerName: r.partner_name ?? null,
     note: r.note ?? null,
-    userFullName: r.user_profiles?.full_name ?? null,
+    userFullName: profilesMap.get(r.user_id) ?? null,
   }))
 
   // Načíst členy organizace pro napovínací výběr spoluháče

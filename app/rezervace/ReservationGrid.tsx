@@ -278,7 +278,12 @@ export default function ReservationGrid({
   function getBusy(courtId: string) {
     return reservations
       .filter(r => r.courtId === courtId && r.status !== 'cancelled')
-      .map(r => ({ start: utcToHHMM(r.startTime), end: utcToHHMM(r.endTime) }))
+      .map(r => ({
+        start: utcToHHMM(r.startTime),
+        end: utcToHHMM(r.endTime),
+        userName: r.userFullName,
+        isOwn: r.userId === currentUserId,
+      }))
   }
 
   function handleSlotClick(court: Court, slot: TimeSlot) {
@@ -473,8 +478,8 @@ export default function ReservationGrid({
                     <div
                       key={slot.start}
                       onClick={() => handleSlotClick(court, slot)}
-                      className={`flex items-center px-4 ${
-                        isHour ? 'border-t border-gray-300 min-h-[2.25rem]' : 'border-t border-dashed border-gray-200 min-h-[1.5rem]'
+                      className={`flex items-center px-4 h-[1.875rem] ${
+                        isHour ? 'border-t border-gray-300' : 'border-t border-dashed border-gray-200'
                       } ${COLORS[state]}`}
                     >
                       <span className={`w-14 font-mono shrink-0 ${isHour ? 'text-sm font-semibold text-gray-700' : 'text-xs text-gray-200'}`}>
@@ -503,7 +508,7 @@ export default function ReservationGrid({
                 style={{ gridTemplateColumns: `4.5rem repeat(${courts.length}, 1fr)` }}
               >
                 {/* Čas */}
-                <div className={`flex items-center justify-end pr-3 ${isHour ? 'py-2' : 'py-0.5'}`}>
+                <div className="flex items-center justify-end pr-3 h-[1.875rem]">
                   {isHour
                     ? <span className="text-xs font-semibold text-gray-600 tabular-nums">{slot.start}</span>
                     : <span className="text-[10px] text-gray-200">·</span>}
@@ -520,7 +525,7 @@ export default function ReservationGrid({
                     return (
                       <div
                         key={court.id}
-                        className={`border-l border-gray-100 bg-gray-50 ${isHour ? 'min-h-[2rem]' : 'min-h-[1.25rem]'}`}
+                        className="border-l border-gray-100 bg-gray-50 h-[1.875rem]"
                       />
                     )
                   }
@@ -533,7 +538,7 @@ export default function ReservationGrid({
                     <div
                       key={court.id}
                       onClick={() => state !== 'past' && handleSlotClick(court, slot)}
-                      className={`border-l border-gray-100 px-2 flex items-center ${isHour ? 'min-h-[2rem]' : 'min-h-[1.25rem]'} ${COLORS[state]}`}
+                      className={`border-l border-gray-100 px-2 flex items-center h-[1.875rem] ${COLORS[state]}`}
                       title={
                         state === 'free' ? `Kliknutím vybrat čas od ${slot.start}` :
                         state === 'mine' && res ? `Vaše rezervace ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}` :
