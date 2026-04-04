@@ -16,6 +16,15 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().split('T')[0]
 }
 
+// Pondělí týdne obsahujícího datum (UTC bezpečné)
+function getWeekStart(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`)
+  const dow = d.getUTCDay()
+  const daysFromMon = dow === 0 ? 6 : dow - 1
+  d.setUTCDate(d.getUTCDate() - daysFromMon)
+  return d.toISOString().split('T')[0]
+}
+
 // Převod lokálního data + čas (Praha) na UTC ISO
 // Používáme Z aby bylo chování konzistentní bez ohledu na TZ serveru/prohlížeče
 function pragueToUTC(dateStr: string, timeStr: string): string {
@@ -29,7 +38,7 @@ function pragueToUTC(dateStr: string, timeStr: string): string {
 }
 
 type PageProps = {
-  searchParams: Promise<{ datum?: string }>
+  searchParams: Promise<{ datum?: string; view?: string }>
 }
 
 export default async function RezervacePage({ searchParams }: PageProps) {
@@ -71,12 +80,13 @@ export default async function RezervacePage({ searchParams }: PageProps) {
     )
   }
 
-  // Datum z URL nebo dnes
+  // Datum + view z URL
   const params = await searchParams
   const today = pragueToday()
   const requestedDate = params.datum ?? today
-  // Sanitace: datum musí být ve formátu YYYY-MM-DD a nesmí být v minulosti víc než 1 den
   const date = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : today
+  const viewParam = params.view === 'week' ? 'week' : 'day'
+  const weekStart = getWeekStart(date)
 
   // Načíst aktivní kurty organizace (admin klient = obchází RLS)
   const { data: courtsRaw } = await admin
@@ -135,8 +145,9 @@ export default async function RezervacePage({ searchParams }: PageProps) {
     : 14
 
   // Načíst rezervace pro vybraný den
-  const dayStart = pragueToUTC(date, '00:00')
-  const dayEnd = pragueToUTC(addDays(date, 1), '00:00')
+  // Načítáme celý týden — pokrývá denní i týdenní pohled
+  const dayStart = pragueToUTC(weekStart, '00:00')
+  const dayEnd = pragueToUTC(addDays(weekStart, 7), '00:00')
 
   const { data: reservationsRaw, error: resError } = await admin
     .from('app_court_reservations')
@@ -208,6 +219,8 @@ export default async function RezervacePage({ searchParams }: PageProps) {
         maxAdvanceDays={maxAdvanceDays}
         currentUserId={user.id}
         orgMembers={orgMembers}
+        view={viewParam}
+        weekStart={weekStart}
       />
     </div>
   )

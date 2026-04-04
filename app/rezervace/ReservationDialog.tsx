@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useEffect, useTransition, useMemo, useRef } from 'react'
 import { createReservation, cancelReservation } from './actions'
 
 // ---------------------------------------------------------------------------
@@ -106,6 +106,16 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
     () => gen30Slots(courtTimeFrom, courtTimeTo),
     [courtTimeFrom, courtTimeTo]
   )
+
+  // === Auto-scroll do oblasti kliknutého času ===
+  const slotsContainerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!slotsContainerRef.current) return
+    const targetMin = Math.max(timeToMin(courtTimeFrom), timeToMin(initialStart) - 60)
+    const targetTime = minToTime(targetMin)
+    const idx = slots.findIndex(s => s.start >= targetTime)
+    if (idx > 0) slotsContainerRef.current.scrollTop = idx * 30  // h-[1.875rem] = 30px
+  }, [])  // pouze při mountu
 
   // === Autocomplete spoluhráče ===
   const suggestions = useMemo(() => {
@@ -311,6 +321,7 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                 </p>
               )}
               <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div ref={slotsContainerRef} className="max-h-[270px] overflow-y-auto">
                 {slots.map(slot => {
                   const busy = getBusyAt(slot)
                   const occupied = busy !== null
@@ -391,6 +402,7 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
                     </div>
                   )
                 })}
+                </div>
               </div>
             </div>
 

@@ -52,6 +52,8 @@ type Props = {
   maxAdvanceDays: number
   currentUserId: string
   orgMembers: OrgMember[]
+  view: 'day' | 'week'
+  weekStart: string
 }
 
 type TimeSlot = { start: string; end: string }
@@ -98,6 +100,20 @@ function addDays(d: string, n: number): string {
   return date.toISOString().split('T')[0]
 }
 
+/** Pondělí týdne obsahujícího dané datum (UTC-safe) */
+function getWeekStart(dateStr: string): string {
+  const d = new Date(`${dateStr}T12:00:00Z`)
+  const dow = d.getUTCDay()
+  const daysFromMon = dow === 0 ? 6 : dow - 1
+  d.setUTCDate(d.getUTCDate() - daysFromMon)
+  return d.toISOString().split('T')[0]
+}
+
+/** UTC ISO → pražské YYYY-MM-DD */
+function getLocalDate(utcIso: string): string {
+  return new Date(utcIso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' })
+}
+
 function getSlotState(
   slot: TimeSlot, courtId: string, dateStr: string,
   reservations: Reservation[], userId: string,
@@ -129,6 +145,28 @@ const COLORS: Record<SlotState, string> = {
   mine:  'bg-blue-100 hover:bg-blue-200 cursor-pointer',
   taken: 'bg-red-50 cursor-default',
   past:  'bg-gray-50 cursor-default',
+}
+
+// ---------------------------------------------------------------------------
+// Sdílená legenda
+// ---------------------------------------------------------------------------
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+      {[
+        ['bg-green-200 border-green-300', 'Volno – kliknutím rezervovat'],
+        ['bg-blue-200 border-blue-400', 'Moje rezervace'],
+        ['bg-red-100 border-red-200', 'Obsazeno'],
+        ['bg-gray-100 border-gray-200', 'Minulost'],
+      ].map(([cls, label]) => (
+        <span key={label} className="flex items-center gap-1.5">
+          <span className={`h-3 w-3 rounded border ${cls}`} />
+          {label}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -224,14 +262,17 @@ function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose }: {
 
 export default function ReservationGrid({
   organizationId, courts, rules, initialReservations, initialDate,
-  maxAdvanceDays, currentUserId, orgMembers,
+  maxAdvanceDays, currentUserId, orgMembers, view, weekStart: initialWeekStart,
 }: Props) {
   const router = useRouter()
   const [date, setDate] = useState(initialDate)
   const [reservations, setReservations] = useState<Reservation[]>(initialReservations)
   const [dialog, setDialog] = useState<DialogData | null>(null)
   const [activeCourt, setActiveCourt] = useState(0)
+  const [activeCourtWeek, setActiveCourtWeek] = useState(0)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [currentView, setCurrentView] = useState<'day' | 'week'>(view)
+  const [currentWeekStart, setCurrentWeekStart] = useState(initialWeekStart)
   const calRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -241,6 +282,8 @@ export default function ReservationGrid({
   // Sync s initial props (po router.refresh)
   useEffect(() => { setDate(initialDate) }, [initialDate])
   useEffect(() => { setReservations(initialReservations) }, [initialReservations])
+  useEffect(() => { setCurrentView(view) }, [view])
+  useEffect(() => { setCurrentWeekStart(initialWeekStart) }, [initialWeekStart])
 
   // Zavřít kalendář při kliknutí mimo
   useEffect(() => {
@@ -268,16 +311,32 @@ export default function ReservationGrid({
   function goToDate(d: string) {
     if (d < today || d > maxDate) return
     setDate(d)
-    router.push(`/rezervace?datum=${d}`)
+    router.push(`/rezervace?datum=${d}&view=${currentView}`)
+  }
+
+  function goToWeek(ws: string) {
+    setCurrentWeekStart(ws)
+    router.push(`/rezervace?datum=${ws}&view=week`)
+  }
+
+  function switchView(v: 'day' | 'week') {
+    setCurrentView(v)
+    if (v === 'week') {
+      const ws = getWeekStart(date)
+      router.push(`/rezervace?datum=${ws}&view=week`)
+    } else {
+      router.push(`/rezervace?datum=${date}&view=day`)
+    }
   }
 
   function getRule(courtId: string) {
     return rules.find(r => r.courtId === courtId)
   }
 
-  function getBusy(courtId: string) {
+  /** Obsazené intervaly pro daný kurt a den (předávané do dialogu) */
+  function getBusyForDay(courtId: string, dayStr: string) {
     return reservations
-      .filter(r => r.courtId === courtId && r.status !== 'cancelled')
+      .filter(r => r.courtId === courtId && r.status !== 'cancelled' && getLocalDate(r.startTime) === dayStr)
       .map(r => ({
         start: utcToHHMM(r.startTime),
         end: utcToHHMM(r.endTime),
@@ -286,29 +345,34 @@ export default function ReservationGrid({
       }))
   }
 
-  function handleSlotClick(court: Court, slot: TimeSlot) {
-    const state = getSlotState(slot, court.id, date, reservations, currentUserId)
+  function getBusy(courtId: string) {
+    return getBusyForDay(courtId, date)
+  }
+
+  /** Jednotný handler otevření dialogu — funguje pro denní i týdenní pohled */
+  function openDialog(court: Court, slot: TimeSlot, dayStr: string) {
+    const state = getSlotState(slot, court.id, dayStr, reservations, currentUserId)
     if (state === 'past') return
     const rule = getRule(court.id)
 
     if (state === 'free') {
       setDialog({
         mode: 'create',
-        court, date, organizationId,
+        court, date: dayStr, organizationId,
         startTime: slot.start,
         courtTimeFrom: rule?.timeFrom ?? '07:00',
         courtTimeTo: rule?.timeTo ?? '21:00',
         maxDurationMinutes: rule?.maxDurationMinutes ?? 120,
         requirePartner: rule?.requirePartner ?? false,
-        busyIntervals: getBusy(court.id),
+        busyIntervals: getBusyForDay(court.id, dayStr),
         orgMembers,
       })
     } else {
-      const res = getResAtSlot(slot, court.id, date, reservations)
+      const res = getResAtSlot(slot, court.id, dayStr, reservations)
       if (!res) return
       setDialog({
         mode: res.userId === currentUserId ? 'view-mine' : 'view-taken',
-        court, date, organizationId,
+        court, date: dayStr, organizationId,
         startTime: utcToHHMM(res.startTime),
         endTime: utcToHHMM(res.endTime),
         courtTimeFrom: rule?.timeFrom ?? '07:00',
@@ -325,6 +389,10 @@ export default function ReservationGrid({
         },
       })
     }
+  }
+
+  function handleSlotClick(court: Court, slot: TimeSlot) {
+    openDialog(court, slot, date)
   }
 
   // Sjednocená 30-min osa (union přes všechny kurty)
@@ -347,11 +415,56 @@ export default function ReservationGrid({
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Prague',
   })
 
+  // Týdenní pohled — výpočty
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i)),
+    [currentWeekStart]
+  )
+
+  const weekCourtIdx = Math.min(activeCourtWeek, courts.length - 1)
+  const weekCourt = courts[weekCourtIdx]
+  const weekRule = weekCourt ? getRule(weekCourt.id) : undefined
+  const weekSlots = weekRule ? gen30Slots(weekRule.timeFrom, weekRule.timeTo) : []
+
+  const weekLabel = weekDays.length === 7
+    ? (() => {
+        const d0 = new Date(weekDays[0] + 'T12:00:00Z')
+        const d6 = new Date(weekDays[6] + 'T12:00:00Z')
+        const sameMonth = d0.getUTCMonth() === d6.getUTCMonth()
+        return sameMonth
+          ? `${d0.getUTCDate()}.–${d6.getUTCDate()}. ${CZ_MONTHS[d6.getUTCMonth()]} ${d6.getUTCFullYear()}`
+          : `${d0.getUTCDate()}. ${CZ_MONTHS[d0.getUTCMonth()]} – ${d6.getUTCDate()}. ${CZ_MONTHS[d6.getUTCMonth()]} ${d6.getUTCFullYear()}`
+      })()
+    : ''
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
   return (
     <div className="flex flex-col gap-4">
+
+      {/* Přepínač Den / Týden */}
+      <div className="flex bg-gray-100 rounded-lg p-1 gap-1 self-start">
+        <button
+          onClick={() => switchView('day')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            currentView === 'day' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Den
+        </button>
+        <button
+          onClick={() => switchView('week')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            currentView === 'week' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Týden
+        </button>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════ DENNÍ POHLED */}
+      {currentView === 'day' && (<>
 
       {/* Navigace data + kalendář */}
       <div className="flex items-center justify-between gap-2">
@@ -422,20 +535,7 @@ export default function ReservationGrid({
         ))}
       </div>
 
-      {/* Legenda */}
-      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-        {[
-          ['bg-green-200 border-green-300', 'Volno – kliknutím vybrat čas'],
-          ['bg-blue-200 border-blue-400', 'Moje rezervace'],
-          ['bg-red-100 border-red-200', 'Obsazeno'],
-          ['bg-gray-100 border-gray-200', 'Minulost'],
-        ].map(([cls, label]) => (
-          <span key={label} className="flex items-center gap-1.5">
-            <span className={`h-3 w-3 rounded border ${cls}`} />
-            {label}
-          </span>
-        ))}
-      </div>
+      <Legend />
 
       {/* ─── Grid ─── */}
       <div className="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
@@ -561,8 +661,139 @@ export default function ReservationGrid({
           })}
         </div>
       </div>
+      </>)}
 
-      {/* Dialog */}
+      {/* ═══════════════════════════════════════════════════════ TÝDENNÍ POHLED */}
+      {currentView === 'week' && (<>
+
+        {/* Navigace týdnů */}
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={() => goToWeek(addDays(currentWeekStart, -7))}
+            disabled={addDays(currentWeekStart, -1) < today}
+            className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Předchozí
+          </button>
+          <span className="text-sm font-semibold text-gray-800 text-center">{weekLabel}</span>
+          <button
+            onClick={() => goToWeek(addDays(currentWeekStart, 7))}
+            disabled={addDays(currentWeekStart, 7) > maxDate}
+            className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Další
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Přepínač kurtů */}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {courts.map((c, idx) => (
+            <button
+              key={c.id}
+              onClick={() => setActiveCourtWeek(idx)}
+              className={`flex-shrink-0 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                weekCourtIdx === idx
+                  ? 'border-green-600 bg-green-600 text-white'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {c.name}
+              <span className={`ml-1.5 text-xs font-normal ${weekCourtIdx === idx ? 'text-green-100' : 'text-gray-400'}`}>
+                ({c.surface === 'clay' ? 'antuka' : c.surface === 'hard' ? 'tvrdý' : c.surface})
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <Legend />
+
+        {/* Týdenní grid — horizontální scroll na mobilech */}
+        {weekCourt && (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+            {/* Záhlaví dnů */}
+            <div
+              className="grid border-b bg-gray-50"
+              style={{ gridTemplateColumns: '4.5rem repeat(7, minmax(80px, 1fr))', minWidth: '680px' }}
+            >
+              <div className="py-3" />
+              {weekDays.map((dayStr, dayIdx) => {
+                const d = new Date(dayStr + 'T12:00:00Z')
+                const isToday = dayStr === today
+                return (
+                  <div
+                    key={dayStr}
+                    className={`py-2 px-1 text-center border-l border-gray-200 ${isToday ? 'bg-green-50' : ''}`}
+                  >
+                    <div className="text-xs font-semibold text-gray-600">{CZ_DAYS[dayIdx]}</div>
+                    <div className={`text-xs tabular-nums ${isToday ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
+                      {d.getUTCDate()}.{d.getUTCMonth() + 1}.
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Řádky slotů */}
+            {weekSlots.map(slot => {
+              const isHour = slot.start.endsWith(':00')
+              return (
+                <div
+                  key={slot.start}
+                  className={`grid ${isHour ? 'border-t border-gray-300' : 'border-t border-dashed border-gray-100'}`}
+                  style={{ gridTemplateColumns: '4.5rem repeat(7, minmax(80px, 1fr))', minWidth: '680px' }}
+                >
+                  {/* Čas */}
+                  <div className="flex items-center justify-end pr-3 h-[1.875rem]">
+                    {isHour
+                      ? <span className="text-xs font-semibold text-gray-600 tabular-nums">{slot.start}</span>
+                      : <span className="text-[10px] text-gray-200">·</span>
+                    }
+                  </div>
+
+                  {/* Buňky dnů */}
+                  {weekDays.map(dayStr => {
+                    const state = getSlotState(slot, weekCourt.id, dayStr, reservations, currentUserId)
+                    const res = getResAtSlot(slot, weekCourt.id, dayStr, reservations)
+                    const isFirstSlot = res ? utcToHHMM(res.startTime) === slot.start : false
+                    const isToday = dayStr === today
+                    return (
+                      <div
+                        key={dayStr}
+                        onClick={() => state !== 'past' && openDialog(weekCourt, slot, dayStr)}
+                        className={`border-l border-gray-100 px-1 flex items-center h-[1.875rem] ${
+                          isToday && state === 'free' ? 'bg-green-50/50' : ''
+                        } ${COLORS[state]}`}
+                        title={
+                          state === 'taken' ? (res?.userFullName ?? 'Obsazeno') :
+                          state === 'mine' ? `Vaše: ${utcToHHMM(res!.startTime)}–${utcToHHMM(res!.endTime)}` :
+                          state === 'free' ? `Rezervovat od ${slot.start}` : ''
+                        }
+                      >
+                        {isFirstSlot && state === 'taken' && (
+                          <span className="text-[10px] text-red-700 truncate leading-tight">{res?.userFullName ?? '•'}</span>
+                        )}
+                        {isFirstSlot && state === 'mine' && (
+                          <span className="text-[10px] text-blue-700 font-semibold leading-tight truncate">
+                            ✓ {utcToHHMM(res!.startTime)}–{utcToHHMM(res!.endTime)}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </>)}
+
+      {/* Dialog — sdílený pro oba pohledy */}
       {dialog && (
         <ReservationDialog
           data={dialog}
