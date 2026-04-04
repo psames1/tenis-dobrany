@@ -55,6 +55,8 @@ type Props = {
   view: 'day' | 'week'
   weekStart: string
   userReservationDates: Array<{ dateStr: string; active: boolean }>
+  showPlayerNames: boolean
+  isAdmin: boolean
 }
 
 type TimeSlot = { start: string; end: string }
@@ -271,7 +273,7 @@ function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose, active
 export default function ReservationGrid({
   organizationId, courts, rules, initialReservations, initialDate,
   maxAdvanceDays, currentUserId, orgMembers, view, weekStart: initialWeekStart,
-  userReservationDates,
+  userReservationDates, showPlayerNames, isAdmin,
 }: Props) {
   const router = useRouter()
   const [date, setDate] = useState(initialDate)
@@ -362,6 +364,14 @@ export default function ReservationGrid({
     return rules.find(r => r.courtId === courtId)
   }
 
+  /** Zobrazitelné jméno — respektuje nastavení viditelnosti */
+  const displayName = (res: Reservation | null): string => {
+    if (!res) return 'Obsazeno'
+    if (res.userId === currentUserId) return res.userFullName ?? 'Vaše'
+    if (showPlayerNames || isAdmin) return res.userFullName ?? 'Obsazeno'
+    return 'Obsazeno'
+  }
+
   /** Obsazené intervaly pro daný kurt a den (předávané do dialogu) */
   function getBusyForDay(courtId: string, dayStr: string) {
     return reservations
@@ -369,7 +379,7 @@ export default function ReservationGrid({
       .map(r => ({
         start: utcToHHMM(r.startTime),
         end: utcToHHMM(r.endTime),
-        userName: r.userFullName,
+        userName: r.userId === currentUserId || showPlayerNames || isAdmin ? r.userFullName : null,
         isOwn: r.userId === currentUserId,
       }))
   }
@@ -395,6 +405,7 @@ export default function ReservationGrid({
         requirePartner: rule?.requirePartner ?? false,
         busyIntervals: getBusyForDay(court.id, dayStr),
         orgMembers,
+        currentUserId,
       })
     } else {
       const res = getResAtSlot(slot, court.id, dayStr, reservations)
@@ -412,7 +423,7 @@ export default function ReservationGrid({
         orgMembers,
         reservation: {
           id: res.id, userId: res.userId,
-          userFullName: res.userFullName,
+          userFullName: res.userId === currentUserId || showPlayerNames || isAdmin ? res.userFullName : null,
           partnerName: res.partnerName,
           note: res.note,
         },
@@ -630,8 +641,15 @@ export default function ReservationGrid({
                         {isHour ? slot.start : ''}
                       </span>
                       <span className="flex-1 text-xs pl-1">
-                        {isFirstSlot && state === 'taken' && <span className="text-red-700">{res?.userFullName ?? 'Obsazeno'}</span>}
+                        {isFirstSlot && state === 'taken' && <span className="text-red-700">{displayName(res)}</span>}
                         {isFirstSlot && state === 'mine' && <span className="text-blue-700 font-medium">✓ Vaše rezervace {utcToHHMM(res!.startTime)}–{utcToHHMM(res!.endTime)}</span>}
+                        {isFirstSlot && state === 'past' && res && (
+                          <span className="text-gray-400">
+                            {res.userId === currentUserId
+                              ? `✓ ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}`
+                              : displayName(res)}
+                          </span>
+                        )}
                       </span>
                     </div>
                   )
@@ -686,15 +704,23 @@ export default function ReservationGrid({
                       title={
                         state === 'free' ? `Kliknutím vybrat čas od ${slot.start}` :
                         state === 'mine' && res ? `Vaše rezervace ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}` :
-                        state === 'taken' ? (res?.userFullName ?? 'Obsazeno') : ''
+                        state === 'taken' ? displayName(res) :
+                        state === 'past' && res ? (res.userId === currentUserId ? `Vaše: ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}` : displayName(res)) : ''
                       }
                     >
                       {isFirstSlot && state === 'taken' && (
-                        <span className="text-[11px] text-red-700 truncate leading-tight">{res?.userFullName ?? 'Obsazeno'}</span>
+                        <span className="text-[11px] text-red-700 truncate leading-tight">{displayName(res)}</span>
                       )}
                       {isFirstSlot && state === 'mine' && (
                         <span className="text-[11px] text-blue-700 font-semibold truncate">
                           ✓ {utcToHHMM(res!.startTime)}–{utcToHHMM(res!.endTime)}
+                        </span>
+                      )}
+                      {isFirstSlot && state === 'past' && res && (
+                        <span className="text-[11px] text-gray-400 truncate leading-tight">
+                          {res.userId === currentUserId
+                            ? `✓ ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}`
+                            : displayName(res)}
                         </span>
                       )}
                     </div>
@@ -814,17 +840,25 @@ export default function ReservationGrid({
                           isToday && state === 'free' ? 'bg-green-50/50' : ''
                         } ${COLORS[state]}`}
                         title={
-                          state === 'taken' ? (res?.userFullName ?? 'Obsazeno') :
+                          state === 'taken' ? displayName(res) :
                           state === 'mine' ? `Vaše: ${utcToHHMM(res!.startTime)}–${utcToHHMM(res!.endTime)}` :
-                          state === 'free' ? `Rezervovat od ${slot.start}` : ''
+                          state === 'free' ? `Rezervovat od ${slot.start}` :
+                          state === 'past' && res ? (res.userId === currentUserId ? `Vaše: ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}` : displayName(res)) : ''
                         }
                       >
                         {isFirstSlot && state === 'taken' && (
-                          <span className="text-[10px] text-red-700 truncate leading-tight">{res?.userFullName ?? '•'}</span>
+                          <span className="text-[10px] text-red-700 truncate leading-tight">{displayName(res)}</span>
                         )}
                         {isFirstSlot && state === 'mine' && (
                           <span className="text-[10px] text-blue-700 font-semibold leading-tight truncate">
                             ✓ {utcToHHMM(res!.startTime)}–{utcToHHMM(res!.endTime)}
+                          </span>
+                        )}
+                        {isFirstSlot && state === 'past' && res && (
+                          <span className="text-[10px] text-gray-400 truncate leading-tight">
+                            {res.userId === currentUserId
+                              ? `✓ ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}`
+                              : displayName(res)}
                           </span>
                         )}
                       </div>

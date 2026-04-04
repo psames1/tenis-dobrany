@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrgContext, getOrganization } from '@/lib/organization'
@@ -164,9 +165,10 @@ export default async function RezervacePage({ searchParams }: PageProps) {
     .eq('organization_id', org.id)
     .gte('start_time', calStart)
     .lt('start_time', calEnd)
+  const now = new Date().toISOString()
   const userReservationDates = (userResDateRaw ?? []).map((r: any) => ({
     dateStr: getLocalDate(r.start_time),
-    active: r.status !== 'cancelled',
+    active: r.status !== 'cancelled' && r.start_time >= now,
   }))
 
   const { data: reservationsRaw, error: resError } = await admin
@@ -225,9 +227,17 @@ export default async function RezervacePage({ searchParams }: PageProps) {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Rezervace kurtů</h1>
-        <p className="mt-1 text-sm text-gray-500">{org.name}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Rezervace kurtů</h1>
+          <p className="mt-1 text-sm text-gray-500">{org.name}</p>
+        </div>
+        <Link
+          href="/moje-rezervace"
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          📋 Moje rezervace
+        </Link>
       </div>
 
       <ReservationGrid
@@ -242,6 +252,8 @@ export default async function RezervacePage({ searchParams }: PageProps) {
         view={viewParam}
         weekStart={weekStart}
         userReservationDates={userReservationDates}
+        showPlayerNames={(org as any).settings?.show_player_names !== false}
+        isAdmin={membership.role === 'admin' || membership.role === 'manager'}
       />
     </div>
   )

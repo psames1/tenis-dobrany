@@ -30,6 +30,7 @@ export type DialogData = {
     isOwn?: boolean
   }>
   orgMembers: OrgMember[]
+  currentUserId?: string
   reservation?: {
     id: string
     userId: string
@@ -205,7 +206,7 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
         const optimistic: import('./ReservationGrid').Reservation = {
           id: result.id,
           courtId: court.id,
-          userId: '',  // server refreshne ke korekci
+          userId: data.currentUserId || '',  // optimistic = ihned 'mine'
           startTime: toUTC(date, selStart),
           endTime: toUTC(date, selEnd!),
           status: 'confirmed',
