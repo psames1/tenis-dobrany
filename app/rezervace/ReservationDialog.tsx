@@ -39,7 +39,11 @@ export type DialogData = {
   }
 }
 
-type Props = { data: DialogData; onClose: () => void; onSuccess: () => void }
+type Props = {
+  data: DialogData
+  onClose: () => void
+  onSuccess: (created?: import('./ReservationGrid').Reservation, cancelledId?: string) => void
+}
 
 // ---------------------------------------------------------------------------
 // Utility
@@ -196,8 +200,22 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
         partnerName: partnerName.trim() || undefined,
         note: note.trim() || undefined,
       })
-      if (result.success) { onSuccess(); onClose() }
-      else setError(result.error)
+      if (result.success) {
+        // Optimistický objekt pro okamžité zobrazení
+        const optimistic: import('./ReservationGrid').Reservation = {
+          id: result.id,
+          courtId: court.id,
+          userId: '',  // server refreshne ke korekci
+          startTime: toUTC(date, selStart),
+          endTime: toUTC(date, selEnd!),
+          status: 'confirmed',
+          partnerName: partnerName.trim() || null,
+          note: note.trim() || null,
+          userFullName: null,
+        }
+        onSuccess(optimistic, undefined)
+        onClose()
+      } else setError(result.error)
     })
   }
 
@@ -206,7 +224,7 @@ export default function ReservationDialog({ data, onClose, onSuccess }: Props) {
     setError(null)
     startTransition(async () => {
       const result = await cancelReservation(reservation.id)
-      if (result.success) { onSuccess(); onClose() }
+      if (result.success) { onSuccess(undefined, reservation.id); onClose() }
       else setError(result.error)
     })
   }

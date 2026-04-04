@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrganization } from '@/lib/organization'
 import CancelReservationButton from './CancelReservationButton'
 
@@ -18,6 +19,7 @@ function getPragueDate(iso: string): string {
 
 export default async function MojeRezervacePage() {
   const supabase = await createClient()
+  const admin = createAdminClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?redirectTo=/moje-rezervace')
 
@@ -26,8 +28,8 @@ export default async function MojeRezervacePage() {
 
   const now = new Date().toISOString()
 
-  // Nadcházející rezervace
-  const { data: upcoming } = await supabase
+  // Nadcházející rezervace — admin klient obchází RLS (JOIN na app_courts by jinak selhal)
+  const { data: upcoming } = await admin
     .from('app_court_reservations')
     .select(`
       id, start_time, end_time, status, partner_name, note,
@@ -40,8 +42,8 @@ export default async function MojeRezervacePage() {
     .order('start_time')
     .limit(20)
 
-  // Historie — posledních 30 rezervací (vč. zrušených)
-  const { data: history } = await supabase
+  // Historie — posledních 30 rezervací (vč. zrušených), admin klient
+  const { data: history } = await admin
     .from('app_court_reservations')
     .select(`
       id, start_time, end_time, status, partner_name,

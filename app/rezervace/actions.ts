@@ -101,7 +101,7 @@ export async function createReservation(
     return { success: false, error: 'Rezervaci se nepodařilo uložit. Zkuste to prosím znovu.' }
   }
 
-  revalidatePath('/rezervace')
+  revalidatePath('/moje-rezervace')
   return { success: true, id: data.id }
 }
 
@@ -173,6 +173,6 @@ export async function cancelReservation(
     return { success: false, error: 'Zrušení rezervace se nepodařilo. Zkuste to prosím znovu.' }
   }
 
-  revalidatePath('/rezervace')
+  revalidatePath('/moje-rezervace')
   return { success: true }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ReservationDialog, { type DialogData, type OrgMember } from './ReservationDialog'
@@ -230,25 +230,25 @@ function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose, active
           if (!ds) return <span key={i} />
           const isToday    = ds === today
           const isCurrent  = ds === currentDate
-          const disabled   = ds < today || ds > maxDate
           return (
             <button
               key={ds}
-              disabled={disabled}
+              disabled={ds > maxDate}
               onClick={() => { onSelect(ds); onClose() }}
               className={`h-8 w-full relative rounded-lg text-xs font-medium transition-colors ${
                 isCurrent ? 'bg-green-600 text-white' :
                 isToday   ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
-                disabled  ? 'text-gray-300 cursor-default' :
+                ds > maxDate ? 'text-gray-300 cursor-default' :
+                ds < today  ? 'text-gray-400 hover:bg-gray-50' :
                 'text-gray-700 hover:bg-gray-100'
               }`}
             >
               {new Date(ds + 'T12:00:00Z').getUTCDate()}
-              {activeDates.has(ds) && (
-                <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full ${isCurrent ? 'bg-white' : 'bg-green-500'}`} />
+      {activeDates.has(ds) && (
+                <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 h-2 w-2 rounded-full ${isCurrent ? 'bg-white' : 'bg-green-500'}`} />
               )}
               {!activeDates.has(ds) && pastDates.has(ds) && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-gray-400" />
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-gray-400" />
               )}
             </button>
           )
@@ -282,6 +282,7 @@ export default function ReservationGrid({
   const [showCalendar, setShowCalendar] = useState(false)
   const [currentView, setCurrentView] = useState<'day' | 'week'>(view)
   const [currentWeekStart, setCurrentWeekStart] = useState(initialWeekStart)
+  const [isRefreshing, startRefresh] = useTransition()
   const calRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -313,7 +314,7 @@ export default function ReservationGrid({
     return () => document.removeEventListener('mousedown', onClick)
   }, [showCalendar])
 
-  // Realtime — při změně v DB refreshne server komponent
+  // Realtime — při změně v DB refreshne server komponent (s transition = není blocking)
   useEffect(() => {
     const supabase = createClient()
     const ch = supabase
@@ -322,13 +323,14 @@ export default function ReservationGrid({
         event: '*', schema: 'public',
         table: 'app_court_reservations',
         filter: `organization_id=eq.${organizationId}`,
-      }, () => router.refresh())
+      }, () => startRefresh(() => { router.refresh() }))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [organizationId, router])
 
   function goToDate(d: string) {
-    if (d < today || d > maxDate) return
+    // Navigace do minulosti povolena (zobrazíme ji read-only)
+    if (d > maxDate) return
     setDate(d)
     router.push(`/rezervace?datum=${d}&view=${currentView}`)
   }
@@ -346,6 +348,14 @@ export default function ReservationGrid({
     } else {
       router.push(`/rezervace?datum=${date}&view=day`)
     }
+  }
+
+  /** Optimistický update: okamžitě přidá nebo zruší rezervaci v lokálním stavu */
+  function optimisticAdd(res: Reservation) {
+    setReservations(prev => [...prev, res])
+  }
+  function optimisticCancel(id: string) {
+    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r))
   }
 
   function getRule(courtId: string) {
@@ -460,7 +470,20 @@ export default function ReservationGrid({
   // Render
   // ---------------------------------------------------------------------------
   return (
-    <div className="flex flex-col gap-4">
+    <div className="relative flex flex-col gap-4">
+
+      {/* Loading overlay — zobrazí se při router.refresh() → skrývá záseknuté rozhraní */}
+      {isRefreshing && (
+        <div className="absolute inset-0 z-40 flex items-start justify-center pt-16 bg-white/60 backdrop-blur-[1px] rounded-xl pointer-events-none">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow text-sm text-gray-600">
+            <svg className="h-4 w-4 animate-spin text-green-600" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+            </svg>
+            Aktualizuji…
+          </div>
+        </div>
+      )}
 
       {/* Přepínač Den / Týden */}
       <div className="flex bg-gray-100 rounded-lg p-1 gap-1 self-start">
@@ -489,7 +512,7 @@ export default function ReservationGrid({
       <div className="flex items-center justify-between gap-2">
         <button
           onClick={() => goToDate(addDays(date, -1))}
-          disabled={date <= today}
+          disabled={false}
           className="rounded-lg border border-gray-300 p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
           aria-label="Předchozí den"
         >
@@ -819,7 +842,11 @@ export default function ReservationGrid({
         <ReservationDialog
           data={dialog}
           onClose={() => setDialog(null)}
-          onSuccess={() => router.refresh()}
+          onSuccess={(created, cancelledId) => {
+            if (created) optimisticAdd(created)
+            if (cancelledId) optimisticCancel(cancelledId)
+            startRefresh(() => { router.refresh() })
+          }}
         />
       )}
     </div>
