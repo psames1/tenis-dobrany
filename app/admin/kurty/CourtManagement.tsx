@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createCourt, toggleCourtActive, updateCourtRule } from './actions'
+import { createCourt, toggleCourtActive, updateCourtRule, deleteCourt } from './actions'
 
 type CourtRule = {
   court_id: string
@@ -46,6 +46,7 @@ export default function CourtManagement({
   const [courts, setCourts] = useState(initialCourts)
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -74,6 +75,19 @@ export default function CourtManagement({
         setError(result.error)
       } else {
         setExpandedRule(null)
+        router.refresh()
+      }
+    })
+  }
+
+  function handleDelete(courtId: string) {
+    startTransition(async () => {
+      const result = await deleteCourt(courtId)
+      if (result.error) {
+        setError(result.error)
+        setConfirmDelete(null)
+      } else {
+        setConfirmDelete(null)
         router.refresh()
       }
     })
@@ -121,7 +135,7 @@ export default function CourtManagement({
                   {court.indoor && ' · Hala'}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 <button
                   onClick={() => setExpandedRule(expandedRule === court.id ? null : court.id)}
                   className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
@@ -139,6 +153,34 @@ export default function CourtManagement({
                 >
                   {court.active ? 'Deaktivovat' : 'Aktivovat'}
                 </button>
+                {/* Trvalé smazání — pouze pro neaktivní kurty */}
+                {!court.active && (
+                  confirmDelete === court.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-red-700 font-medium">Opravdu smazat?</span>
+                      <button
+                        onClick={() => handleDelete(court.id)}
+                        disabled={isPending}
+                        className="rounded px-2 py-1 text-xs bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Smazat
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="rounded px-2 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50"
+                      >
+                        Zrušit
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(court.id)}
+                      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50"
+                    >
+                      Smazat trvale
+                    </button>
+                  )
+                )}
               </div>
             </div>
 

@@ -131,3 +131,44 @@ export async function updateCourtRule(courtId: string, formData: FormData) {
   revalidatePath('/admin/kurty')
   return { success: true }
 }
+
+export async function deleteCourt(courtId: string) {
+  const { supabase, org } = await requireOrgAdmin()
+
+  // Ověřit, že kurt patří do org a je neaktivní
+  const { data: court } = await supabase
+    .from('app_courts')
+    .select('id, active')
+    .eq('id', courtId)
+    .eq('organization_id', org.id)
+    .single()
+
+  if (!court) return { error: 'Kurt nebyl nalezen.' }
+  if (court.active) return { error: 'Nelze smazat aktivní kurt. Nejprve ho deaktivujte.' }
+
+  // Zkontrolovat budoucí potvrzené rezervace
+  const { data: futureRes } = await supabase
+    .from('app_court_reservations')
+    .select('id')
+    .eq('court_id', courtId)
+    .neq('status', 'cancelled')
+    .gte('start_time', new Date().toISOString())
+    .limit(1)
+
+  if (futureRes && futureRes.length > 0) {
+    return { error: 'Kurt má budoucí potvrzené rezervace. Nejprve je zrušte.' }
+  }
+
+  const { error } = await supabase
+    .from('app_courts')
+    .delete()
+    .eq('id', courtId)
+    .eq('organization_id', org.id)
+
+  if (error) return { error: 'Nepodařilo se smazat kurt: ' + error.message }
+
+  revalidatePath('/admin/kurty')
+  revalidatePath('/admin/rezervace')
+  revalidatePath('/rezervace')
+  return { success: true }
+}
