@@ -63,16 +63,32 @@ export async function Navigation() {
     pagesBySection.get(page.section_id)!.push(page as { id: string; title: string; slug: string; section_id: string })
   }
 
-  // Top-level sekce s volitelnými dětmi (stránky v podmenu)
+  // Seskup podsekce podle jejich menu_parent_id
+  const subsectionsByParent = new Map<string, NonNullable<typeof sections>>()
+  for (const s of (sections ?? [])) {
+    if (!s.menu_parent_id) continue
+    if (!subsectionsByParent.has(s.menu_parent_id)) subsectionsByParent.set(s.menu_parent_id, [])
+    subsectionsByParent.get(s.menu_parent_id)!.push(s)
+  }
+
+  // Top-level sekce s volitelnými dětmi (podsekce + stránky v podmenu)
   const navItems: NavItem[] = (sections ?? [])
     .filter(s => !s.menu_parent_id)
     .map(s => {
       const sectionSlug = s.slug
-      const children: NavItem[] = (pagesBySection.get(s.id) ?? []).map(p => ({
+      // Podsekce jako první položky v podmenu
+      const subChildren: NavItem[] = (subsectionsByParent.get(s.id) ?? []).map(sub => ({
+        id: sub.id,
+        label: sub.menu_title ?? sub.title,
+        href: sub.menu_url ?? `/${sub.slug}`,
+      }))
+      // Stránky sekce
+      const pageChildren: NavItem[] = (pagesBySection.get(s.id) ?? []).map(p => ({
         id: p.id,
         label: p.title,
         href: `/${sectionSlug}/${p.slug}`,
       }))
+      const children = [...subChildren, ...pageChildren]
       return {
         id: s.id,
         label: s.menu_title ?? s.title,

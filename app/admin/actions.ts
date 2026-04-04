@@ -274,10 +274,12 @@ export async function saveSection(formData: FormData) {
   const menuOrder   = parseInt(formData.get('menu_order') as string, 10) || 0
   const showInMenu  = formData.get('show_in_menu') === '1'
   const isActive    = formData.get('is_active') === '1'
+  const parentIdRaw = (formData.get('parent_id') as string | null)?.trim() || null
+  const parentId    = parentIdRaw || null
 
   const { error } = await supabase
     .from('sections')
-    .update({ title, menu_title: menuTitle, description, menu_order: menuOrder, show_in_menu: showInMenu, is_active: isActive })
+    .update({ title, menu_title: menuTitle, description, menu_order: menuOrder, show_in_menu: showInMenu, is_active: isActive, menu_parent_id: parentId })
     .eq('id', id)
 
   if (error) {
@@ -307,8 +309,11 @@ export async function createSection(formData: FormData) {
   const title = (formData.get('title') as string).trim()
   if (!title) redirect('/admin/sekce?error=missing_title')
 
+  const parentIdRaw = (formData.get('parent_id') as string | null)?.trim() || null
+  const parentId    = parentIdRaw || null
+
   const slug = toSlug(title)
-  const { error } = await supabase.from('sections').insert({ title, slug })
+  const { error } = await supabase.from('sections').insert({ title, slug, menu_parent_id: parentId })
 
   if (error) {
     redirect(`/admin/sekce?error=${encodeURIComponent(error.message)}`)

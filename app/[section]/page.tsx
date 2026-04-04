@@ -50,7 +50,7 @@ export default async function SectionPage({ params }: Props) {
   const [{ data: section }, { data: { user } }] = await Promise.all([
     supabase
       .from('sections')
-      .select('id, slug, title, description')
+      .select('id, slug, title, description, menu_parent_id')
       .eq('slug', sectionSlug)
       .eq('is_active', true)
       .single(),
@@ -58,6 +58,17 @@ export default async function SectionPage({ params }: Props) {
   ])
 
   if (!section) notFound()
+
+  // Načíst nadřazenou sekci pro breadcrumbs (pokud existuje)
+  let parentSection: { slug: string; title: string } | null = null
+  if (section.menu_parent_id) {
+    const { data: parent } = await supabase
+      .from('sections')
+      .select('slug, title')
+      .eq('id', section.menu_parent_id)
+      .single()
+    parentSection = parent ?? null
+  }
 
   // Zjisti roli uživatele → filtrování viditelnosti článků
   let role: string | null = null
@@ -97,6 +108,14 @@ export default async function SectionPage({ params }: Props) {
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-400 mb-6 flex items-center gap-2">
         <Link href="/" className="hover:text-green-600 transition-colors">Domů</Link>
+        {parentSection && (
+          <>
+            <span>/</span>
+            <Link href={`/${parentSection.slug}`} className="hover:text-green-600 transition-colors">
+              {parentSection.title}
+            </Link>
+          </>
+        )}
         <span>/</span>
         <span className="text-gray-700">{section.title}</span>
       </nav>
