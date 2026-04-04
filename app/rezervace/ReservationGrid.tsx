@@ -54,6 +54,7 @@ type Props = {
   orgMembers: OrgMember[]
   view: 'day' | 'week'
   weekStart: string
+  userReservationDates: Array<{ dateStr: string; active: boolean }>
 }
 
 type TimeSlot = { start: string; end: string }
@@ -176,9 +177,10 @@ function Legend() {
 const CZ_MONTHS = ['Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec']
 const CZ_DAYS = ['Po','Út','St','Čt','Pá','So','Ne']
 
-function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose }: {
+function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose, activeDates, pastDates }: {
   currentDate: string; today: string; maxDate: string
   onSelect: (d: string) => void; onClose: () => void
+  activeDates: Set<string>; pastDates: Set<string>
 }) {
   const [vm, setVm] = useState(() => {
     const d = new Date(currentDate + 'T12:00:00Z')
@@ -234,7 +236,7 @@ function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose }: {
               key={ds}
               disabled={disabled}
               onClick={() => { onSelect(ds); onClose() }}
-              className={`h-8 w-full rounded-lg text-xs font-medium transition-colors ${
+              className={`h-8 w-full relative rounded-lg text-xs font-medium transition-colors ${
                 isCurrent ? 'bg-green-600 text-white' :
                 isToday   ? 'bg-green-100 text-green-700 ring-1 ring-green-300' :
                 disabled  ? 'text-gray-300 cursor-default' :
@@ -242,6 +244,12 @@ function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose }: {
               }`}
             >
               {new Date(ds + 'T12:00:00Z').getUTCDate()}
+              {activeDates.has(ds) && (
+                <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full ${isCurrent ? 'bg-white' : 'bg-green-500'}`} />
+              )}
+              {!activeDates.has(ds) && pastDates.has(ds) && (
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-gray-400" />
+              )}
             </button>
           )
         })}
@@ -263,6 +271,7 @@ function CalendarPicker({ currentDate, today, maxDate, onSelect, onClose }: {
 export default function ReservationGrid({
   organizationId, courts, rules, initialReservations, initialDate,
   maxAdvanceDays, currentUserId, orgMembers, view, weekStart: initialWeekStart,
+  userReservationDates,
 }: Props) {
   const router = useRouter()
   const [date, setDate] = useState(initialDate)
@@ -278,6 +287,16 @@ export default function ReservationGrid({
 
   const today = pragueToday()
   const maxDate = addDays(today, maxAdvanceDays)
+
+  // Sady dat pro zvýraznění v kalendáři
+  const activeDates = useMemo(
+    () => new Set(userReservationDates.filter(r => r.active).map(r => r.dateStr)),
+    [userReservationDates]
+  )
+  const pastDates = useMemo(
+    () => new Set(userReservationDates.filter(r => !r.active).map(r => r.dateStr)),
+    [userReservationDates]
+  )
 
   // Sync s initial props (po router.refresh)
   useEffect(() => { setDate(initialDate) }, [initialDate])
@@ -502,6 +521,8 @@ export default function ReservationGrid({
               maxDate={maxDate}
               onSelect={goToDate}
               onClose={() => setShowCalendar(false)}
+              activeDates={activeDates}
+              pastDates={pastDates}
             />
           )}
         </div>
@@ -547,7 +568,7 @@ export default function ReservationGrid({
         >
           <div className="py-3" />
           {courts.map(c => (
-            <div key={c.id} className="py-3 px-2 text-center text-sm font-semibold text-gray-700 border-l border-gray-200">
+            <div key={c.id} className="py-3 px-2 text-center text-sm font-semibold text-gray-700 border-l border-green-300">
               {c.name}
               <span className="ml-1 text-xs font-normal text-gray-400">
                 ({c.surface === 'clay' ? 'antuka' : c.surface === 'hard' ? 'tvrdý' : c.surface})
@@ -625,7 +646,7 @@ export default function ReservationGrid({
                     return (
                       <div
                         key={court.id}
-                        className="border-l border-gray-100 bg-gray-50 h-[1.875rem]"
+                        className="border-l border-green-100 bg-gray-50 h-[1.875rem]"
                       />
                     )
                   }
@@ -638,7 +659,7 @@ export default function ReservationGrid({
                     <div
                       key={court.id}
                       onClick={() => state !== 'past' && handleSlotClick(court, slot)}
-                      className={`border-l border-gray-100 px-2 flex items-center h-[1.875rem] ${COLORS[state]}`}
+                      className={`border-l border-green-200 px-2 flex items-center h-[1.875rem] ${COLORS[state]}`}
                       title={
                         state === 'free' ? `Kliknutím vybrat čas od ${slot.start}` :
                         state === 'mine' && res ? `Vaše rezervace ${utcToHHMM(res.startTime)}–${utcToHHMM(res.endTime)}` :
@@ -728,7 +749,7 @@ export default function ReservationGrid({
                 return (
                   <div
                     key={dayStr}
-                    className={`py-2 px-1 text-center border-l border-gray-200 ${isToday ? 'bg-green-50' : ''}`}
+                    className={`py-2 px-1 text-center border-l border-green-300 ${isToday ? 'bg-green-50' : ''}`}
                   >
                     <div className="text-xs font-semibold text-gray-600">{CZ_DAYS[dayIdx]}</div>
                     <div className={`text-xs tabular-nums ${isToday ? 'text-green-700 font-bold' : 'text-gray-500'}`}>
@@ -766,7 +787,7 @@ export default function ReservationGrid({
                       <div
                         key={dayStr}
                         onClick={() => state !== 'past' && openDialog(weekCourt, slot, dayStr)}
-                        className={`border-l border-gray-100 px-1 flex items-center h-[1.875rem] ${
+                        className={`border-l border-green-200 px-1 flex items-center h-[1.875rem] ${
                           isToday && state === 'free' ? 'bg-green-50/50' : ''
                         } ${COLORS[state]}`}
                         title={

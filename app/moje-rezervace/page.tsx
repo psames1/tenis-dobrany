@@ -12,6 +12,10 @@ function formatDateTime(iso: string): { date: string; time: string } {
   }
 }
 
+function getPragueDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' })
+}
+
 export default async function MojeRezervacePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -102,7 +106,15 @@ export default async function MojeRezervacePage() {
                     <p className="text-xs text-gray-400 mt-0.5">{r.note}</p>
                   )}
                 </div>
-                <CancelReservationButton reservationId={r.id} />
+                <div className="flex flex-col gap-2 shrink-0">
+                  <Link
+                    href={`/rezervace?datum=${getPragueDate(r.start_time)}`}
+                    className="rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 transition-colors text-center whitespace-nowrap"
+                  >
+                    📅 V kalendáři
+                  </Link>
+                  <CancelReservationButton reservationId={r.id} />
+                </div>
               </div>
             )
           })}
@@ -132,7 +144,14 @@ export default async function MojeRezervacePage() {
                   return (
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-700">{r.app_courts?.name ?? '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 capitalize">{start.date}</td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/rezervace?datum=${getPragueDate(r.start_time)}`}
+                          className="text-gray-600 capitalize hover:text-green-600 hover:underline"
+                        >
+                          {start.date}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-gray-600">{start.time} – {end.time}</td>
                       <td className="px-4 py-3">
                         <StatusBadge status={r.status} />

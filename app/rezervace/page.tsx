@@ -37,6 +37,11 @@ function pragueToUTC(dateStr: string, timeStr: string): string {
   return new Date(probe.getTime() - offsetH * 3_600_000).toISOString()
 }
 
+// UTC ISO → pražské YYYY-MM-DD
+function getLocalDate(utcIso: string): string {
+  return new Date(utcIso).toLocaleDateString('sv-SE', { timeZone: 'Europe/Prague' })
+}
+
 type PageProps = {
   searchParams: Promise<{ datum?: string; view?: string }>
 }
@@ -149,6 +154,21 @@ export default async function RezervacePage({ searchParams }: PageProps) {
   const dayStart = pragueToUTC(weekStart, '00:00')
   const dayEnd = pragueToUTC(addDays(weekStart, 7), '00:00')
 
+  // Načíst datumy rezervací uživatele pro zvýraznění v kalendáři (±60 dní + horizon)
+  const calStart = pragueToUTC(addDays(today, -60), '00:00')
+  const calEnd   = pragueToUTC(addDays(today, maxAdvanceDays + 1), '00:00')
+  const { data: userResDateRaw } = await admin
+    .from('app_court_reservations')
+    .select('start_time, status')
+    .eq('user_id', user.id)
+    .eq('organization_id', org.id)
+    .gte('start_time', calStart)
+    .lt('start_time', calEnd)
+  const userReservationDates = (userResDateRaw ?? []).map((r: any) => ({
+    dateStr: getLocalDate(r.start_time),
+    active: r.status !== 'cancelled',
+  }))
+
   const { data: reservationsRaw, error: resError } = await admin
     .from('app_court_reservations')
     .select('id, court_id, user_id, start_time, end_time, status, partner_name, note')
@@ -221,6 +241,7 @@ export default async function RezervacePage({ searchParams }: PageProps) {
         orgMembers={orgMembers}
         view={viewParam}
         weekStart={weekStart}
+        userReservationDates={userReservationDates}
       />
     </div>
   )
