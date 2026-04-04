@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createCourt, toggleCourtActive, updateCourtRule, deleteCourt } from './actions'
+import { createCourt, toggleCourtActive, updateCourtRule, deleteCourt, setCourtUseDefaults } from './actions'
 
 type CourtRule = {
   court_id: string
@@ -25,6 +25,7 @@ type Court = {
   indoor: boolean
   active: boolean
   sort_order: number
+  use_org_defaults: boolean
   rule: CourtRule
 }
 
@@ -47,6 +48,7 @@ export default function CourtManagement({
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [pendingDefault, setPendingDefault] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -93,6 +95,20 @@ export default function CourtManagement({
     })
   }
 
+  function handleToggleDefault(courtId: string, checked: boolean) {
+    setPendingDefault(courtId)
+    startTransition(async () => {
+      const result = await setCourtUseDefaults(courtId, checked)
+      setPendingDefault(null)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        if (checked) setExpandedRule(null)
+        router.refresh()
+      }
+    })
+  }
+
   function handleNewCourt(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
@@ -127,18 +143,24 @@ export default function CourtManagement({
             className={`rounded-xl border bg-white shadow-sm transition-all ${court.active ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}
           >
             {/* Hlavička kurtu */}
-            <div className="flex items-center justify-between px-5 py-4">
-              <div>
-                <span className="font-semibold text-gray-900">{court.name}</span>
-                <span className="ml-2 text-sm text-gray-400">
-                  {SURFACE_LABELS[court.surface] ?? court.surface}
-                  {court.indoor && ' · Hala'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <span className="font-semibold text-gray-900">{court.name}</span>
+                  <span className="ml-2 text-sm text-gray-400">
+                    {SURFACE_LABELS[court.surface] ?? court.surface}
+                    {court.indoor && ' · Hala'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
                 <button
                   onClick={() => setExpandedRule(expandedRule === court.id ? null : court.id)}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  disabled={!!court.use_org_defaults}
+                  className={`rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    court.use_org_defaults
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
                 >
                   {expandedRule === court.id ? 'Skrýt pravidla' : 'Pravidla'}
                 </button>
@@ -182,6 +204,24 @@ export default function CourtManagement({
                   )
                 )}
               </div>
+              </div>
+
+              {/* Přepínač: standardní pravidla oddílu */}
+              <label className={`mt-3 flex items-center gap-2 cursor-pointer w-fit select-none ${pendingDefault === court.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={!!court.use_org_defaults}
+                  onChange={e => handleToggleDefault(court.id, e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                />
+                <span className="text-xs text-gray-600">Standardní pravidla oddílu</span>
+                {pendingDefault === court.id && (
+                  <svg className="h-3.5 w-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+                  </svg>
+                )}
+              </label>
             </div>
 
             {/* Stav pravidel */}
@@ -192,7 +232,7 @@ export default function CourtManagement({
             )}
 
             {/* Formulář pravidel */}
-            {expandedRule === court.id && (
+            {expandedRule === court.id && !court.use_org_defaults && (
               <form
                 onSubmit={(e) => handleRuleSubmit(court.id, e)}
                 className="border-t border-gray-100 px-5 py-4 grid grid-cols-2 gap-3 bg-gray-50 rounded-b-xl"

@@ -71,8 +71,6 @@ export default async function AdminRezervaceNastaveniPage() {
       </div>
 
       <ReservationSettings
-        courts={courtsWithRules}
-        organizationId={org.id}
         orgSettings={orgSettings}
         orgDefaultRules={orgDefaultRules}
       />

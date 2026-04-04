@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrganization } from '@/lib/organization'
 
 async function requireOrgAdmin() {
@@ -22,7 +23,7 @@ async function requireOrgAdmin() {
     throw new Error('Nedostatečná oprávnění')
   }
 
-  return { supabase, org }
+  return { supabase, admin: createAdminClient(), org }
 }
 
 export async function createCourt(formData: FormData) {
@@ -129,6 +130,29 @@ export async function updateCourtRule(courtId: string, formData: FormData) {
   if (error) return { error: 'Nepodařilo se uložit pravidlo.' }
 
   revalidatePath('/admin/kurty')
+  return { success: true }
+}
+
+export async function setCourtUseDefaults(courtId: string, useDefaults: boolean) {
+  const { supabase, admin, org } = await requireOrgAdmin()
+
+  const { data: court } = await supabase
+    .from('app_courts')
+    .select('id')
+    .eq('id', courtId)
+    .eq('organization_id', org.id)
+    .single()
+  if (!court) return { error: 'Kurt nebyl nalezen.' }
+
+  const { error } = await admin
+    .from('app_courts')
+    .update({ use_org_defaults: useDefaults })
+    .eq('id', courtId)
+  if (error) return { error: 'Nepodařilo se aktualizovat kurt.' }
+
+  revalidatePath('/admin/kurty')
+  revalidatePath('/admin/rezervace')
+  revalidatePath('/rezervace')
   return { success: true }
 }
 

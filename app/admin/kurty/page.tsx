@@ -30,7 +30,7 @@ export default async function AdminKurtyPage() {
   // Načíst kurty s aktuálními pravidly
   const { data: courts } = await supabase
     .from('app_courts')
-    .select('id, name, surface, indoor, active, sort_order')
+    .select('id, name, surface, indoor, active, sort_order, use_org_defaults')
     .eq('organization_id', org.id)
     .order('sort_order')
 
