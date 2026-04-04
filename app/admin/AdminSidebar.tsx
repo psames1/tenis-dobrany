@@ -9,6 +9,7 @@ const NAV = [
   { href: '/admin/sekce', label: 'Sekce', icon: '🗂️' },
   { href: '/admin/design', label: 'Design', icon: '🎨' },
   { href: '/admin/kurty', label: 'Kurty', icon: '🎾' },
+  { href: '/admin/rezervace', label: 'Nastavení rezervací', icon: '⚙️' },
 ]
 
 const ADMIN_ONLY = [
