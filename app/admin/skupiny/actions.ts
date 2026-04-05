@@ -72,12 +72,13 @@ export async function saveGroupPermissions(formData: FormData) {
   const supabase = await requireAdmin()
   const groupId   = formData.get('group_id')   as string
   const sectionId = formData.get('section_id') as string
+  const canView       = formData.get('can_view')               === '1'
   const canCreate     = formData.get('can_create_articles')    === '1'
   const canEdit       = formData.get('can_edit_articles')      === '1'
   const canDelete     = formData.get('can_delete_articles')    === '1'
   const canSubsection = formData.get('can_create_subsections') === '1'
 
-  if (!canCreate && !canEdit && !canDelete && !canSubsection) {
+  if (!canView && !canCreate && !canEdit && !canDelete && !canSubsection) {
     // Žádné oprávnění → smaž záznam
     await supabase.from('section_group_permissions')
       .delete().eq('group_id', groupId).eq('section_id', sectionId)
@@ -85,6 +86,7 @@ export async function saveGroupPermissions(formData: FormData) {
     const { error } = await supabase.from('section_group_permissions').upsert({
       group_id:               groupId,
       section_id:             sectionId,
+      can_view:               canView,
       can_create_articles:    canCreate,
       can_edit_articles:      canEdit,
       can_delete_articles:    canDelete,

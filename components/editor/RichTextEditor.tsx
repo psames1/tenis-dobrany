@@ -11,12 +11,13 @@ import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
+import { TextStyle, Color, BackgroundColor } from '@tiptap/extension-text-style'
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Bold, Italic, Strikethrough, Heading2, Heading3, Heading4,
   List, ListOrdered, Quote, Minus, Table2, Image as ImageIcon,
-  Undo2, Redo2, Plus, Trash2, Link2, Link2Off, Code2,
+  Undo2, Redo2, Plus, Trash2, Link2, Link2Off, Code2, Baseline, Highlighter,
 } from 'lucide-react'
 
 // ── Upload helper ─────────────────────────────────────────────────────────────
@@ -336,6 +337,91 @@ function Btn({
 
 const Sep = () => <div className="w-px h-5 bg-gray-300 mx-0.5 self-center shrink-0" />
 
+// ── Paleta barev ──────────────────────────────────────────────────────────────
+const COLOR_PALETTE = [
+  // row 1: základní
+  '#000000', '#374151', '#6b7280', '#9ca3af', '#d1d5db', '#ffffff',
+  // row 2: červené
+  '#dc2626', '#ef4444', '#f87171', '#fca5a5',
+  // row 3: oranžové
+  '#ea580c', '#f97316', '#fb923c', '#fdba74',
+  // row 4: žluté
+  '#ca8a04', '#eab308', '#facc15', '#fde047',
+  // row 5: zelené
+  '#15803d', '#16a34a', '#22c55e', '#86efac',
+  // row 6: modré
+  '#1d4ed8', '#2563eb', '#3b82f6', '#93c5fd',
+  // row 7: fialové/růžové
+  '#7c3aed', '#9333ea', '#ec4899', '#f9a8d4',
+]
+
+type ColorPickerProps = {
+  label: string
+  icon: React.ReactNode
+  show: boolean
+  onToggle: () => void
+  currentColor: string | null
+  onColor: (color: string) => void
+  onClear: () => void
+}
+
+function ColorPicker({ label, icon, show, onToggle, currentColor, onColor, onClear }: ColorPickerProps) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        title={label}
+        onMouseDown={e => { e.preventDefault(); onToggle() }}
+        className={`p-1.5 rounded transition-colors flex flex-col items-center gap-0.5
+          ${show ? 'bg-green-600 text-white' : 'text-gray-600 hover:bg-gray-200'}
+        `}
+      >
+        {icon}
+        {/* Proužek aktuální barvy */}
+        <span
+          className="h-1 w-4 rounded-full"
+          style={{ background: currentColor ?? 'transparent', border: currentColor ? 'none' : '1px solid #ccc' }}
+        />
+      </button>
+      {show && (
+        <div
+          className="absolute left-0 top-9 z-50 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-48"
+          onMouseDown={e => e.preventDefault()}
+        >
+          <div className="grid grid-cols-6 gap-1 mb-2">
+            {COLOR_PALETTE.map(c => (
+              <button
+                key={c}
+                type="button"
+                title={c}
+                style={{ background: c, outline: currentColor === c ? '2px solid #16a34a' : undefined, outlineOffset: '1px' }}
+                className={`w-6 h-6 rounded cursor-pointer border border-gray-200 hover:scale-110 transition-transform`}
+                onMouseDown={e => { e.preventDefault(); onColor(c); }}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2 items-center border-t border-gray-100 pt-2">
+            <input
+              type="color"
+              className="w-7 h-7 rounded cursor-pointer border border-gray-200"
+              defaultValue={currentColor ?? '#000000'}
+              onChange={e => onColor(e.target.value)}
+            />
+            <span className="text-xs text-gray-500 flex-1">Vlastní barva</span>
+            <button
+              type="button"
+              className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+              onMouseDown={e => { e.preventDefault(); onClear() }}
+            >
+              ✕ odebrat
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export function RichTextEditor({ defaultValue, name = 'content', showImagePanel = false, minHeight = 'min-h-64' }: Props) {
   const hiddenRef      = useRef<HTMLInputElement>(null)
@@ -352,6 +438,8 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
   const [htmlValue, setHtmlValue]       = useState<string>(defaultValue ?? '')
   const htmlModeRef                     = useRef(false)
   const htmlValueRef                    = useRef(defaultValue ?? '')
+  const [showTextColor, setShowTextColor]   = useState(false)
+  const [showBgColor, setShowBgColor]       = useState(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -366,6 +454,9 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
       TableRow,
       TableHeader,
       TableCell,
+      TextStyle,
+      Color,
+      BackgroundColor,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { rel: 'noopener noreferrer', class: 'underline text-green-700 hover:text-green-900' },
@@ -549,6 +640,26 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
           active={editor.isActive('strike')} title="Přeškrtnout">
           <Strikethrough size={16} />
         </Btn>
+
+        {/* Barvy */}
+        <ColorPicker
+          label="Barva písma"
+          icon={<Baseline size={14} />}
+          show={showTextColor}
+          onToggle={() => { setShowTextColor(v => !v); setShowBgColor(false) }}
+          currentColor={editor.getAttributes('textStyle').color ?? null}
+          onColor={c => { editor.chain().focus().setColor(c).run(); setShowTextColor(false) }}
+          onClear={() => { editor.chain().focus().unsetColor().run(); setShowTextColor(false) }}
+        />
+        <ColorPicker
+          label="Barva pozadí (zvýraznění)"
+          icon={<Highlighter size={14} />}
+          show={showBgColor}
+          onToggle={() => { setShowBgColor(v => !v); setShowTextColor(false) }}
+          currentColor={editor.getAttributes('textStyle').backgroundColor ?? null}
+          onColor={c => { editor.chain().focus().setBackgroundColor(c).run(); setShowBgColor(false) }}
+          onClear={() => { editor.chain().focus().unsetBackgroundColor().run(); setShowBgColor(false) }}
+        />
 
         <Sep />
 

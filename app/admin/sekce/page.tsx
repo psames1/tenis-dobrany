@@ -168,8 +168,7 @@ export default async function AdminSekce({
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {([
-                        { name: 'can_create_articles',    label: 'Přidávat články',   val: sp.can_create_articles    },
+                      {([                        { name: 'can_view',              label: 'Zobrazit sekci',    val: (sp as unknown as Record<string,boolean>).can_view ?? false },                        { name: 'can_create_articles',    label: 'Přidávat články',   val: sp.can_create_articles    },
                         { name: 'can_edit_articles',      label: 'Editovat články',   val: sp.can_edit_articles      },
                         { name: 'can_delete_articles',    label: 'Mazat články',      val: sp.can_delete_articles    },
                         { name: 'can_create_subsections', label: 'Tvořit podsekce', val: sp.can_create_subsections },
@@ -207,8 +206,7 @@ export default async function AdminSekce({
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5 mb-3">
-                  {([
-                    { name: 'can_create_articles',    label: 'Přidávat články'   },
+                  {([                    { name: 'can_view',              label: 'Zobrazit sekci'   },                    { name: 'can_create_articles',    label: 'Přidávat články'   },
                     { name: 'can_edit_articles',      label: 'Editovat články'   },
                     { name: 'can_delete_articles',    label: 'Mazat články'      },
                     { name: 'can_create_subsections', label: 'Tvořit podsekce' },

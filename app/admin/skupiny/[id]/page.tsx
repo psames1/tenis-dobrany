@@ -187,6 +187,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
                   </div>
                   <div className="grid grid-cols-2 gap-y-1.5 gap-x-3">
                     {[
+                      { name: 'can_view',               label: 'Zobrazit sekci',     val: (perm as unknown as Record<string,boolean> | undefined)?.can_view ?? false },
                       { name: 'can_create_articles',    label: 'Přidávat články',    val: perm?.can_create_articles    ?? false },
                       { name: 'can_edit_articles',      label: 'Editovat články',    val: perm?.can_edit_articles      ?? false },
                       { name: 'can_delete_articles',    label: 'Mazat články',       val: perm?.can_delete_articles    ?? false },

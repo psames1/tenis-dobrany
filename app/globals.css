@@ -175,8 +175,12 @@
     @apply w-full border-collapse my-4 text-sm;
   }
   table th {
-    @apply bg-green-700 text-white font-semibold px-3 py-2 text-left border border-green-800;
+    @apply bg-green-700 px-3 py-2 text-left border border-green-800;
+    color: #ffffff !important;
+    font-weight: 700 !important;
   }
+  /* Barevné marky uvnitř th nesmí přebít bílý text */
+  table th span[style*="color"] { color: inherit !important; }
   table td {
     @apply px-3 py-2 border border-gray-200 text-gray-700 align-top;
   }
@@ -217,8 +221,12 @@
     @apply w-full border-collapse my-5 text-sm overflow-x-auto block;
   }
   table th {
-    @apply bg-green-700 text-white font-semibold px-3 py-2 text-left border border-green-800;
+    @apply bg-green-700 px-3 py-2 text-left border border-green-800;
+    color: #ffffff !important;
+    font-weight: 700 !important;
   }
+  /* Barevné marky uvnitř th nesmí přebít bílý text */
+  table th span[style*="color"] { color: inherit !important; }
   table td {
     @apply px-3 py-2 border border-gray-200 text-gray-700 align-top;
   }

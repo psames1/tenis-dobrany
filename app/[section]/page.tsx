@@ -94,25 +94,36 @@ export default async function SectionPage({ params }: Props) {
   }
   const visibilities = visibilitiesForRole(role)
 
-  // Zjisti oprávnění na sekci (pro sekční editory)
-  let canCreateArticles = false
-  if (role === 'admin' || role === 'manager') {
-    canCreateArticles = true
-  } else if (user) {
+  // Zjisti skupiny uživatele (pro sekční oprávnění)
+  let userGroupIds: string[] = []
+  if (user && role) {
     const { data: memberships } = await supabase
       .from('user_group_members')
       .select('group_id')
       .eq('user_id', user.id)
-    const groupIds = (memberships ?? []).map(m => m.group_id)
-    if (groupIds.length > 0) {
-      const { data: perms } = await supabase
-        .from('section_group_permissions')
-        .select('can_create_articles')
-        .eq('section_id', section.id)
-        .in('group_id', groupIds)
-      canCreateArticles = (perms ?? []).some(p => p.can_create_articles)
-    }
+    userGroupIds = (memberships ?? []).map(m => m.group_id)
   }
+
+  // Zjisti oprávnění na sekci (pro sekční editory)
+  let canCreateArticles = false
+  let groupHasView = false
+
+  if (role === 'admin' || role === 'manager') {
+    canCreateArticles = true
+  } else if (user && userGroupIds.length > 0) {
+    const { data: perms } = await supabase
+      .from('section_group_permissions')
+      .select('can_create_articles, can_view')
+      .eq('section_id', section.id)
+      .in('group_id', userGroupIds)
+    canCreateArticles = (perms ?? []).some(p => p.can_create_articles)
+    groupHasView      = (perms ?? []).some(p => (p as unknown as Record<string,boolean>).can_view)
+  }
+
+  // Pokud skupina má can_view → rozšíř viditelnost o 'member' level
+  const effectiveVisibilities = groupHasView && !visibilities.includes('member')
+    ? [...visibilities, 'member']
+    : visibilities
 
   // Sekce "aktuality" zobrazuje i články z jiných sekcí označené is_news=true
   const isAktuality = sectionSlug === 'aktuality'
@@ -121,7 +132,7 @@ export default async function SectionPage({ params }: Props) {
     .from('pages')
     .select('id, slug, title, excerpt, content, image_url, updated_at, is_members_only, section_id, sections(id, slug, title)')
     .eq('is_active', true)
-    .in('visibility', visibilities)
+    .in('visibility', effectiveVisibilities)
     .order('updated_at', { ascending: false })
 
   const subsectionIds = subsections.map(s => s.id)

@@ -409,6 +409,7 @@ export async function saveSectionGroupPermissions(formData: FormData) {
 
   const groupId   = formData.get('group_id')   as string
   const sectionId = formData.get('section_id') as string
+  const canView       = formData.get('can_view')               === '1'
   const canCreate     = formData.get('can_create_articles')    === '1'
   const canEdit       = formData.get('can_edit_articles')      === '1'
   const canDelete     = formData.get('can_delete_articles')    === '1'
@@ -416,12 +417,13 @@ export async function saveSectionGroupPermissions(formData: FormData) {
 
   if (!groupId || !sectionId) redirect('/admin/sekce?error=missing_data')
 
-  if (!canCreate && !canEdit && !canDelete && !canSubsection) {
+  if (!canView && !canCreate && !canEdit && !canDelete && !canSubsection) {
     await supabase.from('section_group_permissions')
       .delete().eq('group_id', groupId).eq('section_id', sectionId)
   } else {
     const { error } = await supabase.from('section_group_permissions').upsert({
       group_id: groupId, section_id: sectionId,
+      can_view: canView,
       can_create_articles: canCreate, can_edit_articles: canEdit,
       can_delete_articles: canDelete, can_create_subsections: canSubsection,
     }, { onConflict: 'group_id,section_id' })

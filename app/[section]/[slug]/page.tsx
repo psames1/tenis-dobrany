@@ -92,7 +92,26 @@ export default async function ArticlePage({ params }: Props) {
   const requiredLevel = visibilityLevel[page.visibility] ?? 0
   const userLevel = userRole ? (roleLevel[userRole] ?? 1) : 0
 
-  if (requiredLevel > userLevel) {
+  // Zkontroluj skupinovou видitelnost — pokud má skupina can_view na tuto sekci,
+  // uživatel má efektivní úroveň alespoň 'member' (1)
+  let groupElevatedLevel = userLevel
+  if (user && userRole && requiredLevel > userLevel && requiredLevel <= 1) {
+    const { data: memberships } = await supabase
+      .from('user_group_members').select('group_id').eq('user_id', user.id)
+    const gids = (memberships ?? []).map(m => m.group_id)
+    if (gids.length > 0) {
+      const { data: vPerms } = await supabase
+        .from('section_group_permissions')
+        .select('can_view')
+        .eq('section_id', section.id)
+        .in('group_id', gids)
+      if ((vPerms ?? []).some(p => (p as unknown as Record<string,boolean>).can_view)) {
+        groupElevatedLevel = 1 // member level
+      }
+    }
+  }
+
+  if (requiredLevel > groupElevatedLevel) {
     redirect(`/login?redirectTo=/${sectionSlug}/${slug}`)
   }
 
