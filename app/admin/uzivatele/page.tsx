@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
-import { changeUserRole, toggleUserActive, inviteUser, cancelInvitation } from './actions'
+import { changeUserRole, toggleUserActive, inviteUser, cancelInvitation, setUserGroups } from './actions'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Admin – Uživatelé' }
@@ -40,6 +40,24 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
     .from('user_profiles')
     .select('id, email, full_name, phone, role, is_active, created_at')
     .order('created_at', { ascending: false })
+
+  // Načti všechny uživatelsky definované skupiny
+  const { data: allGroups } = await supabase
+    .from('user_groups')
+    .select('id, name')
+    .order('name')
+
+  // Načti členství všech uživatelů ve skupinách
+  const { data: allMemberships } = await supabase
+    .from('user_group_members')
+    .select('user_id, group_id')
+
+  // Index: user_id → Set<group_id>
+  const membershipByUser = new Map<string, Set<string>>()
+  for (const m of allMemberships ?? []) {
+    if (!membershipByUser.has(m.user_id)) membershipByUser.set(m.user_id, new Set())
+    membershipByUser.get(m.user_id)!.add(m.group_id)
+  }
 
   // Načti status potvrzení emailu z Supabase Admin API
   type AuthInfo = { is_confirmed: boolean; last_sign_in: string | null }
@@ -82,6 +100,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
       {success === 'role_changed' && (
         <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
           ✓ Role uživatele byla změněna.
+        </div>
+      )}
+      {success === 'groups_updated' && (
+        <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
+          ✓ Skupiny uživatele byly aktualizovány.
         </div>
       )}
       {success === 'status_changed' && (
@@ -134,6 +157,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Uživatel</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden sm:table-cell">Telefon</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Role</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">Skupiny</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600">Stav</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden lg:table-cell">Aktivita</th>
               <th className="px-4 py-3" />
@@ -192,9 +216,40 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
                     )}
                   </td>
 
+                  {/* Skupiny — vícenásobný výběr */}
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    {(allGroups ?? []).length === 0 ? (
+                      <span className="text-xs text-gray-300">—</span>
+                    ) : (
+                      <form action={setUserGroups} className="flex flex-wrap gap-1 items-center">
+                        <input type="hidden" name="user_id" value={u.id} />
+                        {(allGroups ?? []).map(g => {
+                          const checked = membershipByUser.get(u.id)?.has(g.id) ?? false
+                          return (
+                            <label key={g.id} className="flex items-center gap-1 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                name="group_id"
+                                value={g.id}
+                                defaultChecked={checked}
+                                className="w-3 h-3 accent-green-600"
+                              />
+                              <span className="text-xs text-gray-600">{g.name}</span>
+                            </label>
+                          )
+                        })}
+                        <button
+                          type="submit"
+                          className="ml-1 px-2 py-0.5 text-xs text-green-700 border border-green-200 bg-green-50 rounded hover:bg-green-100 transition-colors"
+                        >
+                          OK
+                        </button>
+                      </form>
+                    )}
+                  </td>
+
                   {/* Stav — třestavový: Čeká / Aktivní / Blokovaný */}
-                  <td className="px-4 py-3">
-                    {isPending ? (
+                  <td className="px-4 py-3">                    {isPending ? (
                       <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
                         Čeká na aktivaci
                       </span>
@@ -251,7 +306,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Search
             })}
             {(profiles ?? []).length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
                   Žádní uživatelé.
                 </td>
               </tr>

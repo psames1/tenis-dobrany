@@ -24,7 +24,7 @@ export default async function AdminSekce({
       .order('name'),
     supabase
       .from('section_group_permissions')
-      .select('group_id, section_id, can_create_articles, can_edit_articles, can_delete_articles, can_create_subsections'),
+      .select('group_id, section_id, can_view, can_create_articles, can_edit_articles, can_delete_articles, can_create_subsections'),
   ])
 
   const allSections = sections ?? []
@@ -168,7 +168,9 @@ export default async function AdminSekce({
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {([                        { name: 'can_view',              label: 'Zobrazit sekci',    val: (sp as unknown as Record<string,boolean>).can_view ?? false },                        { name: 'can_create_articles',    label: 'Přidávat články',   val: sp.can_create_articles    },
+                      {([
+                        { name: 'can_view',              label: 'Zobrazit sekci',    val: sp.can_view                   },
+                        { name: 'can_create_articles',    label: 'Přidávat články',   val: sp.can_create_articles    },
                         { name: 'can_edit_articles',      label: 'Editovat články',   val: sp.can_edit_articles      },
                         { name: 'can_delete_articles',    label: 'Mazat články',      val: sp.can_delete_articles    },
                         { name: 'can_create_subsections', label: 'Tvořit podsekce', val: sp.can_create_subsections },

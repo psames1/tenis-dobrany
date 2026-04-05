@@ -115,3 +115,33 @@ export async function cancelInvitation(formData: FormData) {
   revalidatePath('/admin/uzivatele')
   redirect('/admin/uzivatele?success=invitation_cancelled')
 }
+
+// ─── Nastavit členství uživatele ve skupinách ─────────────────────────────────
+
+export async function setUserGroups(formData: FormData) {
+  const supabase = await requireAdmin()
+
+  const userId   = formData.get('user_id') as string | null
+  const groupIds = formData.getAll('group_id') as string[]
+
+  if (!userId) redirect('/admin/uzivatele?error=missing_id')
+
+  // Smaž stávající členství a vlož nová (transakční operace)
+  const { error: delError } = await supabase
+    .from('user_group_members')
+    .delete()
+    .eq('user_id', userId)
+
+  if (delError) redirect(`/admin/uzivatele?error=${encodeURIComponent(delError.message)}`)
+
+  if (groupIds.length > 0) {
+    const rows = groupIds.map(gid => ({ user_id: userId, group_id: gid }))
+    const { error: insError } = await supabase
+      .from('user_group_members')
+      .insert(rows)
+    if (insError) redirect(`/admin/uzivatele?error=${encodeURIComponent(insError.message)}`)
+  }
+
+  revalidatePath('/admin/uzivatele')
+  redirect('/admin/uzivatele?success=groups_updated')
+}

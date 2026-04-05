@@ -176,11 +176,7 @@
   }
   table th {
     @apply bg-green-700 px-3 py-2 text-left border border-green-800;
-    color: #ffffff !important;
-    font-weight: 700 !important;
   }
-  /* Barevné marky uvnitř th nesmí přebít bílý text */
-  table th span[style*="color"] { color: inherit !important; }
   table td {
     @apply px-3 py-2 border border-gray-200 text-gray-700 align-top;
   }
@@ -222,11 +218,7 @@
   }
   table th {
     @apply bg-green-700 px-3 py-2 text-left border border-green-800;
-    color: #ffffff !important;
-    font-weight: 700 !important;
   }
-  /* Barevné marky uvnitř th nesmí přebít bílý text */
-  table th span[style*="color"] { color: inherit !important; }
   table td {
     @apply px-3 py-2 border border-gray-200 text-gray-700 align-top;
   }
@@ -276,4 +268,16 @@
 .tiptap-editor table[data-style="plain"] td {
   border: 1px dashed #e5e7eb !important;
   background: none !important;
+}
+
+/* === Bílý tučný text v zelené hlavičce tabulky ===
+   Musí být na top-level (ne nested) aby správně přebil Tailwind v4 a TipTap color marky */
+.tiptap-editor table th,
+.article-content table th {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+.tiptap-editor table th *,
+.article-content table th * {
+  color: inherit !important;
 }
