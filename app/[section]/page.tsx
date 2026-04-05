@@ -37,7 +37,7 @@ function stripHtml(html: string): string {
 }
 
 function excerptFallback(excerpt: string | null, content: string | null, maxChars = 150): string | null {
-  if (excerpt?.trim()) return stripHtml(excerpt.trim())
+  if (excerpt?.trim()) return excerpt.trim()
   if (!content) return null
   const plain = stripHtml(content)
   return plain.length > maxChars ? plain.slice(0, maxChars) + '…' : plain || null
@@ -225,7 +225,10 @@ export default async function SectionPage({ params }: Props) {
                     {article.title}
                   </h2>
                   {preview && (
-                    <p className="text-sm text-gray-500 line-clamp-2">{preview}</p>
+                    <div
+                      className="text-sm text-gray-500 line-clamp-3 excerpt-preview"
+                      dangerouslySetInnerHTML={{ __html: preview }}
+                    />
                   )}
                   <span className="mt-3 text-sm text-green-600 font-medium">
                     Číst více →

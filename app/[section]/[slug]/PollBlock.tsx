@@ -42,7 +42,8 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
     fd.set('section_slug', sectionSlug)
     fd.set('article_slug', articleSlug)
     fd.set('allow_multiple', allowMultiple ? '1' : '0')
-    if (isVoted) fd.set('unvote', '1')
+    // Single-choice: klik na již zvolenou = odvolat; multi: server rozhodne
+    if (!allowMultiple && isVoted) fd.set('unvote', '1')
 
     startTransition(async () => {
       const result = await castPollVote(fd)

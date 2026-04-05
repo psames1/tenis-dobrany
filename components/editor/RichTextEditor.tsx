@@ -380,6 +380,26 @@ export function RichTextEditor({ defaultValue, name = 'content', showImagePanel 
       attributes: {
         class: `tiptap-editor ${minHeight} px-4 py-3 focus:outline-none text-gray-800`,
       },
+      handlePaste(view, event) {
+        const items = Array.from(event.clipboardData?.items ?? [])
+        const imageItem = items.find(i => i.type.startsWith('image/'))
+        if (!imageItem) return false
+        event.preventDefault()
+        const file = imageItem.getAsFile()
+        if (!file) return false
+        setUploading(true)
+        setUploadError(null)
+        uploadToStorage(file)
+          .then(url => {
+            const node = view.state.schema.nodes.image.create({ src: url, alt: '' })
+            const tr = view.state.tr.replaceSelectionWith(node)
+            view.dispatch(tr)
+            // onUpdate fires automatically and syncs hiddenRef
+          })
+          .catch(() => setUploadError('Nepodařilo se nahrát obrázek ze schránky.'))
+          .finally(() => setUploading(false))
+        return true
+      },
     },
   })
 

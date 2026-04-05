@@ -272,6 +272,28 @@ export default async function ArticlePage({ params }: Props) {
           </div>
         )}
 
+        {/* Anketa */}
+        {page.allow_poll && pollOptions && pollOptions.length > 0 && (
+          <PollBlock
+            pageId={page.id}
+            question={page.poll_question ?? null}
+            allowMultiple={page.poll_allow_multiple ?? false}
+            options={pollOptions.map(opt => ({
+              id: opt.id,
+              label: opt.label,
+              voters: pollVotes
+                .filter(v => v.option_id === opt.id)
+                .map(v => ({
+                  user_id: v.user_id,
+                  name: (v.user_profiles as { full_name: string | null } | null)?.full_name ?? null,
+                })),
+            }))}
+            userId={user?.id ?? null}
+            sectionSlug={sectionSlug}
+            articleSlug={slug}
+          />
+        )}
+
         {/* Komentáře */}
         {page.allow_comments && (
           <div className="mt-10 pt-6 border-t border-gray-100">
@@ -317,28 +339,6 @@ export default async function ArticlePage({ params }: Props) {
               </p>
             )}
           </div>
-        )}
-
-        {/* Anketa */}
-        {page.allow_poll && pollOptions && pollOptions.length > 0 && (
-          <PollBlock
-            pageId={page.id}
-            question={page.poll_question ?? null}
-            allowMultiple={page.poll_allow_multiple ?? false}
-            options={pollOptions.map(opt => ({
-              id: opt.id,
-              label: opt.label,
-              voters: pollVotes
-                .filter(v => v.option_id === opt.id)
-                .map(v => ({
-                  user_id: v.user_id,
-                  name: (v.user_profiles as { full_name: string | null } | null)?.full_name ?? null,
-                })),
-            }))}
-            userId={user?.id ?? null}
-            sectionSlug={sectionSlug}
-            articleSlug={slug}
-          />
         )}
       </article>
 

@@ -151,10 +151,24 @@ export async function castPollVote(formData: FormData): Promise<{ error?: string
           .in('option_id', pageOptions.map(o => o.id))
           .eq('user_id', user.id)
       }
+    } else {
+      // Vícenásobná volba: pokud už hlasoval pro tuto možnost, odvolat
+      const { data: existing } = await supabase
+        .from('page_poll_votes')
+        .select('id')
+        .eq('option_id', optionId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (existing) {
+        await supabase.from('page_poll_votes').delete().eq('id', existing.id)
+        revalidatePath(`/${sectionSlug}/${articleSlug}`)
+        return {}
+      }
     }
+    // Vložit hlas (DELETE proběhl výše — INSERT je bezpečný)
     const { error } = await supabase
       .from('page_poll_votes')
-      .upsert({ option_id: optionId, user_id: user.id })
+      .insert({ option_id: optionId, user_id: user.id })
     if (error) return { error: error.message }
   }
 

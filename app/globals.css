@@ -251,6 +251,18 @@
   strong { @apply font-semibold; }
 }
 
+/* ── Excerpt preview (výpis článků) ────────────────────────────────────── */
+.excerpt-preview {
+  p  { @apply my-0 leading-snug; }
+  p + p { @apply mt-1; }
+  strong, b { @apply font-semibold; }
+  em, i { @apply italic; }
+  ul { @apply list-disc pl-4 my-0.5; }
+  ol { @apply list-decimal pl-4 my-0.5; }
+  /* skryjeme obrázky a nadpisy v perexu */
+  img, h1, h2, h3, h4, h5, h6, table, blockquote, hr { @apply hidden; }
+}
+
 /* Plain table in Tiptap editor */
 .tiptap-editor table[data-style="plain"] th,
 .tiptap-editor table[data-style="plain"] td {
