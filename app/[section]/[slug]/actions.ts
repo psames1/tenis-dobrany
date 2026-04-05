@@ -115,3 +115,49 @@ export async function updateComment(formData: FormData): Promise<{ error?: strin
   revalidatePath(`/${sectionSlug}/${articleSlug}`)
   return {}
 }
+
+export async function castPollVote(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Pro hlasování se musíte přihlásit.' }
+
+  const pageId        = (formData.get('page_id')     as string | null)?.trim()
+  const optionId      = (formData.get('option_id')    as string | null)?.trim()
+  const sectionSlug   = (formData.get('section_slug') as string | null)?.trim()
+  const articleSlug   = (formData.get('article_slug') as string | null)?.trim()
+  const allowMultiple = formData.get('allow_multiple') === '1'
+  const unvote        = formData.get('unvote') === '1'
+
+  if (!pageId || !optionId || !sectionSlug || !articleSlug) return { error: 'Neplatný požadavek.' }
+
+  if (unvote) {
+    await supabase
+      .from('page_poll_votes')
+      .delete()
+      .eq('option_id', optionId)
+      .eq('user_id', user.id)
+  } else {
+    if (!allowMultiple) {
+      // Jednoduchá volba: smazat předchozí hlasy uživatele v této anketě
+      const { data: pageOptions } = await supabase
+        .from('page_poll_options')
+        .select('id')
+        .eq('page_id', pageId)
+
+      if (pageOptions && pageOptions.length > 0) {
+        await supabase
+          .from('page_poll_votes')
+          .delete()
+          .in('option_id', pageOptions.map(o => o.id))
+          .eq('user_id', user.id)
+      }
+    }
+    const { error } = await supabase
+      .from('page_poll_votes')
+      .upsert({ option_id: optionId, user_id: user.id })
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath(`/${sectionSlug}/${articleSlug}`)
+  return {}
+}

@@ -37,7 +37,7 @@ function stripHtml(html: string): string {
 }
 
 function excerptFallback(excerpt: string | null, content: string | null, maxChars = 150): string | null {
-  if (excerpt?.trim()) return excerpt.trim()
+  if (excerpt?.trim()) return stripHtml(excerpt.trim())
   if (!content) return null
   const plain = stripHtml(content)
   return plain.length > maxChars ? plain.slice(0, maxChars) + '…' : plain || null

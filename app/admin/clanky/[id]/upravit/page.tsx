@@ -16,10 +16,10 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
   const { success, error, notified } = await (searchParams as unknown as Promise<{ success?: string; error?: string; notified?: string }>)
   const supabase = await createClient()
 
-  const [{ data: article }, { data: sections }, { data: galleryImages }, { data: contributors }, { data: savedDocuments }] = await Promise.all([
+  const [{ data: article }, { data: sections }, { data: galleryImages }, { data: contributors }, { data: savedDocuments }, { data: pollOptions }] = await Promise.all([
     supabase
       .from('pages')
-      .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, is_news, show_in_menu, allow_comments, visibility, sort_order, published_at')
+      .select('id, title, slug, section_id, excerpt, content, image_url, is_active, is_members_only, is_news, show_in_menu, allow_comments, allow_poll, poll_question, poll_allow_multiple, visibility, sort_order, published_at')
       .eq('id', id)
       .single(),
     supabase
@@ -40,6 +40,11 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
     supabase
       .from('page_documents')
       .select('title, description, file_url, document_date')
+      .eq('page_id', id)
+      .order('sort_order'),
+    supabase
+      .from('page_poll_options')
+      .select('label')
       .eq('page_id', id)
       .order('sort_order'),
   ])
@@ -94,7 +99,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
         </div>
       )}
 
-      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} savedDocuments={docsWithSignedUrls as { title: string; description: string; file_url: string; document_date: string; display_url?: string }[]} />
+      <ArticleForm article={article} sections={sections ?? []} galleryImages={galleryImages ?? []} contributors={(contributors ?? []) as unknown as import('@/app/admin/clanky/ArticleContributors').ContributorRecord[]} savedDocuments={docsWithSignedUrls as { title: string; description: string; file_url: string; document_date: string; display_url?: string }[]} pollOptions={(pollOptions ?? []).map(o => ({ label: o.label }))} />
     </div>
   )
 }

@@ -113,7 +113,7 @@ export default async function HomePage() {
                         </h3>
                         <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
                         {article.excerpt && (
-                          <p className="text-sm text-gray-500 line-clamp-3 flex-1">{article.excerpt}</p>
+                          <p className="text-sm text-gray-500 line-clamp-3 flex-1">{article.excerpt.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, ' ').trim()}</p>
                         )}
                       </div>
                       <div className="bg-green-50 h-40 flex items-center justify-center text-5xl flex-shrink-0 overflow-hidden">

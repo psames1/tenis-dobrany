@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 import { ArticleGallery } from '@/components/gallery/ArticleGallery'
 import { CommentForm } from './CommentForm'
 import { CommentItem } from './CommentItem'
+import { PollBlock } from './PollBlock'
 import { Pencil, FileDown, MessageSquare } from 'lucide-react'
 
 type Props = {
@@ -66,7 +67,7 @@ export default async function ArticlePage({ params }: Props) {
 
   const { data: page } = await supabase
     .from('pages')
-    .select('id, slug, title, excerpt, content, image_url, visibility, allow_comments, published_at')
+    .select('id, slug, title, excerpt, content, image_url, visibility, allow_comments, allow_poll, poll_question, poll_allow_multiple, published_at')
     .eq('section_id', section.id)
     .eq('slug', slug)
     .eq('is_active', true)
@@ -100,6 +101,7 @@ export default async function ArticlePage({ params }: Props) {
     { data: galleryImages },
     { data: documents },
     { data: comments },
+    { data: pollOptions },
   ] = await Promise.all([
     supabase
       .from('page_gallery')
@@ -119,7 +121,25 @@ export default async function ArticlePage({ params }: Props) {
           .eq('is_active', true)
           .order('created_at', { ascending: true })
       : Promise.resolve({ data: null }),
+    page.allow_poll
+      ? supabase
+          .from('page_poll_options')
+          .select('id, label')
+          .eq('page_id', page.id)
+          .order('sort_order')
+      : Promise.resolve({ data: null }),
   ])
+
+  // Hlasy z ankety — nutno načíst po options (potřebujeme IDs možností)
+  let pollVotes: { option_id: string; user_id: string; user_profiles: { full_name: string | null } | null }[] = []
+  if (page.allow_poll && pollOptions && pollOptions.length > 0) {
+    const optionIds = pollOptions.map(o => o.id)
+    const { data: votes } = await supabase
+      .from('page_poll_votes')
+      .select('option_id, user_id, user_profiles(full_name)')
+      .in('option_id', optionIds)
+    pollVotes = (votes ?? []) as unknown as typeof pollVotes
+  }
 
   // Je uživatel contributor tohoto článku?
   const isPrivileged = userRole === 'admin' || userRole === 'manager'
@@ -297,6 +317,28 @@ export default async function ArticlePage({ params }: Props) {
               </p>
             )}
           </div>
+        )}
+
+        {/* Anketa */}
+        {page.allow_poll && pollOptions && pollOptions.length > 0 && (
+          <PollBlock
+            pageId={page.id}
+            question={page.poll_question ?? null}
+            allowMultiple={page.poll_allow_multiple ?? false}
+            options={pollOptions.map(opt => ({
+              id: opt.id,
+              label: opt.label,
+              voters: pollVotes
+                .filter(v => v.option_id === opt.id)
+                .map(v => ({
+                  user_id: v.user_id,
+                  name: (v.user_profiles as { full_name: string | null } | null)?.full_name ?? null,
+                })),
+            }))}
+            userId={user?.id ?? null}
+            sectionSlug={sectionSlug}
+            articleSlug={slug}
+          />
         )}
       </article>
 

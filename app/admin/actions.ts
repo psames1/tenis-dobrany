@@ -50,9 +50,12 @@ export async function saveArticle(formData: FormData) {
   const isActive   = formData.get('is_active') === '1'
   const isNews     = formData.get('is_news') === '1'
   const visibility = (formData.get('visibility') as string | null) || 'public'
-  const isMembersOnly = visibility !== 'public'    // odvozeno z visibility
+  const isMembersOnly = visibility !== 'public'
   const showInMenu = formData.get('show_in_menu') === '1'
   const allowComments = formData.get('allow_comments') === '1'
+  const allowPoll      = formData.get('allow_poll') === '1'
+  const pollQuestion   = (formData.get('poll_question') as string | null)?.trim() || null
+  const pollAllowMulti = formData.get('poll_allow_multiple') === '1'
   const sortOrder  = parseInt((formData.get('sort_order') as string | null) ?? '0', 10) || 0
   const publishedAt = (formData.get('published_at') as string | null) || new Date().toISOString()
 
@@ -80,6 +83,9 @@ export async function saveArticle(formData: FormData) {
         visibility,
         show_in_menu: showInMenu,
         allow_comments: allowComments,
+        allow_poll: allowPoll,
+        poll_question: pollQuestion,
+        poll_allow_multiple: pollAllowMulti,
         sort_order: sortOrder,
         published_at: publishedAt,
         updated_at: new Date().toISOString(),
@@ -107,6 +113,9 @@ export async function saveArticle(formData: FormData) {
         visibility,
         show_in_menu: showInMenu,
         allow_comments: allowComments,
+        allow_poll: allowPoll,
+        poll_question: pollQuestion,
+        poll_allow_multiple: pollAllowMulti,
         sort_order: sortOrder,
         published_at: publishedAt,
         created_by: user.id,
@@ -162,6 +171,28 @@ export async function saveArticle(formData: FormData) {
       }
     } catch {
       // Chyba příloh je nekritická — článek byl uložen
+    }
+  }
+
+  // ── Uložit možnosti ankety ────────────────────────────────────────────────
+  const pollOptionsJson = formData.get('poll_options_json') as string | null
+  if (pollOptionsJson !== null) {
+    try {
+      type PollOptInput = { label: string }
+      const opts = JSON.parse(pollOptionsJson) as PollOptInput[]
+      await supabase.from('page_poll_options').delete().eq('page_id', targetId)
+      const validOpts = opts.filter(o => o.label?.trim())
+      if (validOpts.length > 0 && allowPoll) {
+        await supabase.from('page_poll_options').insert(
+          validOpts.map((o, i) => ({
+            page_id: targetId,
+            label: o.label.trim(),
+            sort_order: i,
+          }))
+        )
+      }
+    } catch {
+      // Chyba ankety je nekritická — článek byl uložen
     }
   }
 

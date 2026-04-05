@@ -23,6 +23,9 @@ type Article = {
   show_in_menu: boolean
   sort_order: number
   allow_comments: boolean
+  allow_poll: boolean
+  poll_question: string | null
+  poll_allow_multiple: boolean
   visibility: string
   published_at: string
 }
@@ -44,6 +47,8 @@ type DocumentItem = {
 
 type LocalGalleryImg = { url: string }
 
+type PollOptionInput = { label: string }
+
 type Props = {
   sections: Section[]
   article?: Article
@@ -51,6 +56,7 @@ type Props = {
   contributors?: ContributorRecord[]
   savedDocuments?: DocumentItem[]
   defaultSectionId?: string
+  pollOptions?: PollOptionInput[]
 }
 
 async function uploadDocumentFile(file: File): Promise<string> {
@@ -90,7 +96,7 @@ async function uploadCoverImage(file: File): Promise<string> {
   return supabase.storage.from('images').getPublicUrl(path).data.publicUrl
 }
 
-export function ArticleForm({ sections, article, galleryImages, contributors, savedDocuments, defaultSectionId }: Props) {
+export function ArticleForm({ sections, article, galleryImages, contributors, savedDocuments, defaultSectionId, pollOptions: initialPollOptions }: Props) {
   const isEdit = !!article
   const publishedDate = article?.published_at
     ? new Date(article.published_at).toISOString().slice(0, 16)
@@ -142,6 +148,22 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
   const docFileRef = useRef<HTMLInputElement>(null)
   const replaceDocFileRef = useRef<HTMLInputElement>(null)
   const [replaceIndex, setReplaceIndex] = useState<number | null>(null)
+
+  // Anketa
+  const [pollEnabled, setPollEnabled] = useState(article?.allow_poll ?? false)
+  const [pollOptions, setPollOptions] = useState<PollOptionInput[]>(initialPollOptions ?? [])
+  const [newOptionLabel, setNewOptionLabel] = useState('')
+
+  function addPollOption() {
+    const label = newOptionLabel.trim()
+    if (!label) return
+    setPollOptions(prev => [...prev, { label }])
+    setNewOptionLabel('')
+  }
+
+  function removePollOption(index: number) {
+    setPollOptions(prev => prev.filter((_, i) => i !== index))
+  }
 
   function updateDoc(index: number, field: keyof DocumentItem, value: string) {
     setDocuments(prev => prev.map((d, i) => i === index ? { ...d, [field]: value } : d))
@@ -612,7 +634,91 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
             />
             <span className="text-sm text-gray-700">Povolit komentáře</span>
           </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              name="allow_poll"
+              value="1"
+              checked={pollEnabled}
+              onChange={e => setPollEnabled(e.target.checked)}
+              className="w-4 h-4 accent-green-600"
+            />
+            <span className="text-sm text-gray-700">Povolit anketu</span>
+          </label>
         </div>
+
+        {/* Nastavení ankety — zobrazí se jen když je povolena */}
+        {pollEnabled && (
+          <div className="border border-green-200 bg-green-50/40 rounded-xl p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700">Nastavení ankety</h3>
+
+            {/* Skrytá pole pro serializaci stavu */}
+            <input type="hidden" name="poll_options_json" value={JSON.stringify(pollOptions)} />
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Otázka ankety</label>
+              <input
+                name="poll_question"
+                type="text"
+                defaultValue={article?.poll_question ?? ''}
+                placeholder="Např. Kdy se vám hodí přijít na brigádu?"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="poll_allow_multiple"
+                value="1"
+                defaultChecked={article?.poll_allow_multiple ?? false}
+                className="w-4 h-4 accent-green-600"
+              />
+              <span className="text-sm text-gray-700">Umožnit zaškrtnout více možností</span>
+            </label>
+
+            {/* Seznam možností */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Možnosti ({pollOptions.length})</label>
+              {pollOptions.length === 0 && (
+                <p className="text-xs text-gray-400 mb-2">Zatím žádné možnosti. Přidejte je níže.</p>
+              )}
+              <div className="space-y-1 mb-3">
+                {pollOptions.map((opt, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-2">
+                    <span className="flex-1 text-sm text-gray-800">{opt.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => removePollOption(i)}
+                      className="text-xs text-red-400 hover:text-red-600 transition-colors shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newOptionLabel}
+                  onChange={e => setNewOptionLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPollOption() } }}
+                  placeholder="Nová možnost…"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <button
+                  type="button"
+                  onClick={addPollOption}
+                  className="px-3 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  + Přidat
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">Stiskněte Enter nebo klikněte + Přidat.</p>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <label className="text-sm text-gray-700 shrink-0" htmlFor="sort_order">
             Pořadí
