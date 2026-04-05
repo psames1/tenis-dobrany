@@ -70,6 +70,18 @@ export default async function SectionPage({ params }: Props) {
     parentSection = parent ?? null
   }
 
+  // Fetch subsections (only for top-level sections — subsection slug + title for badge)
+  let subsections: { id: string; slug: string; title: string }[] = []
+  if (!section.menu_parent_id) {
+    const { data: subs } = await supabase
+      .from('sections')
+      .select('id, slug, title')
+      .eq('menu_parent_id', section.id)
+      .eq('is_active', true)
+    subsections = subs ?? []
+  }
+  const subsectionMap = new Map(subsections.map(s => [s.id, s]))
+
   // Zjisti roli uživatele → filtrování viditelnosti článků
   let role: string | null = null
   if (user) {
@@ -82,19 +94,42 @@ export default async function SectionPage({ params }: Props) {
   }
   const visibilities = visibilitiesForRole(role)
 
+  // Zjisti oprávnění na sekci (pro sekční editory)
+  let canCreateArticles = false
+  if (role === 'admin' || role === 'manager') {
+    canCreateArticles = true
+  } else if (user) {
+    const { data: memberships } = await supabase
+      .from('user_group_members')
+      .select('group_id')
+      .eq('user_id', user.id)
+    const groupIds = (memberships ?? []).map(m => m.group_id)
+    if (groupIds.length > 0) {
+      const { data: perms } = await supabase
+        .from('section_group_permissions')
+        .select('can_create_articles')
+        .eq('section_id', section.id)
+        .in('group_id', groupIds)
+      canCreateArticles = (perms ?? []).some(p => p.can_create_articles)
+    }
+  }
+
   // Sekce "aktuality" zobrazuje i články z jiných sekcí označené is_news=true
   const isAktuality = sectionSlug === 'aktuality'
 
   const pagesQuery = supabase
     .from('pages')
-    .select('id, slug, title, excerpt, content, image_url, published_at, is_members_only, sections(slug)')
+    .select('id, slug, title, excerpt, content, image_url, published_at, is_members_only, section_id, sections(id, slug, title)')
     .eq('is_active', true)
     .in('visibility', visibilities)
     .order('sort_order', { ascending: false })
     .order('published_at', { ascending: false })
 
+  const subsectionIds = subsections.map(s => s.id)
   if (isAktuality) {
     pagesQuery.or(`section_id.eq.${section.id},is_news.eq.true`)
+  } else if (subsectionIds.length > 0) {
+    pagesQuery.in('section_id', [section.id, ...subsectionIds])
   } else {
     pagesQuery.eq('section_id', section.id)
   }
@@ -120,7 +155,19 @@ export default async function SectionPage({ params }: Props) {
         <span className="text-gray-700">{section.title}</span>
       </nav>
 
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">{section.title}</h1>
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <h1 className="text-3xl font-bold text-gray-900">{section.title}</h1>
+        {canCreateArticles && (
+          <Link
+            href={role === 'admin' || role === 'manager'
+              ? `/admin/clanky/novy?section=${sectionSlug}`
+              : `/clenove/sekce/${sectionSlug}/novy`}
+            className="shrink-0 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            + Nový článek
+          </Link>
+        )}
+      </div>
       {section.description && (
         <p className="text-gray-500 mb-10">{section.description}</p>
       )}
@@ -136,6 +183,9 @@ export default async function SectionPage({ params }: Props) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const sec = Array.isArray((article as any).sections) ? (article as any).sections[0] : (article as any).sections
             const articleSection = sec?.slug ?? sectionSlug
+            const fromSubsection = article.section_id !== section.id
+              ? subsectionMap.get(article.section_id ?? '') ?? null
+              : null
             const preview = excerptFallback(article.excerpt, article.content)
             return (
             <article
@@ -160,6 +210,11 @@ export default async function SectionPage({ params }: Props) {
                 <div className="p-5 flex flex-col justify-center flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <time className="text-xs text-gray-400">{formatDate(article.published_at)}</time>
+                    {fromSubsection && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600 rounded-full">
+                        {fromSubsection.title}
+                      </span>
+                    )}
                     {article.is_members_only && (
                       <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                         Pouze pro členy

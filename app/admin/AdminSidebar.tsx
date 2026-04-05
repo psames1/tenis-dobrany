@@ -18,6 +18,7 @@ const REZERVACE_NAV = [
 
 const ADMIN_ONLY = [
   { href: '/admin/uzivatele', label: 'Uživatelé', icon: '👥' },
+  { href: '/admin/skupiny',   label: 'Skupiny',    icon: '🏷️' },
 ]
 
 type Props = {

@@ -276,10 +276,11 @@ export async function saveSection(formData: FormData) {
   const isActive    = formData.get('is_active') === '1'
   const parentIdRaw = (formData.get('parent_id') as string | null)?.trim() || null
   const parentId    = parentIdRaw || null
+  const visibility  = (formData.get('visibility') as string | null) ?? 'public'
 
   const { error } = await supabase
     .from('sections')
-    .update({ title, menu_title: menuTitle, description, menu_order: menuOrder, show_in_menu: showInMenu, is_active: isActive, menu_parent_id: parentId })
+    .update({ title, menu_title: menuTitle, description, menu_order: menuOrder, show_in_menu: showInMenu, is_active: isActive, menu_parent_id: parentId, visibility })
     .eq('id', id)
 
   if (error) {
@@ -311,9 +312,10 @@ export async function createSection(formData: FormData) {
 
   const parentIdRaw = (formData.get('parent_id') as string | null)?.trim() || null
   const parentId    = parentIdRaw || null
+  const visibility  = (formData.get('visibility') as string | null) ?? 'public'
 
   const slug = toSlug(title)
-  const { error } = await supabase.from('sections').insert({ title, slug, menu_parent_id: parentId })
+  const { error } = await supabase.from('sections').insert({ title, slug, menu_parent_id: parentId, visibility })
 
   if (error) {
     redirect(`/admin/sekce?error=${encodeURIComponent(error.message)}`)

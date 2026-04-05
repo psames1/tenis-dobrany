@@ -15,7 +15,7 @@ export default async function AdminSekce({
 
   const { data: sections } = await supabase
     .from('sections')
-    .select('id, slug, title, menu_title, description, menu_order, show_in_menu, is_active, menu_parent_id')
+    .select('id, slug, title, menu_title, description, menu_order, show_in_menu, is_active, menu_parent_id, visibility')
     .order('menu_order')
 
   const allSections = sections ?? []
@@ -63,6 +63,18 @@ export default async function AdminSekce({
                 ))}
             </select>
             <p className="mt-1 text-[11px] text-gray-400">Podsekce se v menu zobrazují jako položky podmenu nadřazené sekce.</p>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Viditelnost sekce</label>
+            <select name="visibility" defaultValue={section.visibility ?? 'public'}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <option value="public">Veřejná — vidí všichni</option>
+              <option value="member">Přihlášení členové</option>
+              <option value="editor">Manager a administrátor</option>
+              <option value="admin">Pouze administrátor</option>
+            </select>
+            <p className="mt-1 text-[11px] text-gray-400">Určuje, kdo může sekci a její články vidět v menu a navštívit.</p>
           </div>
 
           <div className="sm:col-span-2">
