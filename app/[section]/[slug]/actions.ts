@@ -127,6 +127,8 @@ export async function castPollVote(formData: FormData): Promise<{ error?: string
   const articleSlug   = (formData.get('article_slug') as string | null)?.trim()
   const allowMultiple = formData.get('allow_multiple') === '1'
   const unvote        = formData.get('unvote') === '1'
+  const noteRaw       = (formData.get('note') as string | null)?.trim() ?? null
+  const note          = noteRaw && noteRaw.length <= 500 ? noteRaw : null
 
   if (!pageId || !optionId || !sectionSlug || !articleSlug) return { error: 'Neplatný požadavek.' }
 
@@ -168,7 +170,7 @@ export async function castPollVote(formData: FormData): Promise<{ error?: string
     // Vložit hlas (DELETE proběhl výše — INSERT je bezpečný)
     const { error } = await supabase
       .from('page_poll_votes')
-      .insert({ option_id: optionId, user_id: user.id })
+      .insert({ option_id: optionId, user_id: user.id, note })
     if (error) return { error: error.message }
   }
 

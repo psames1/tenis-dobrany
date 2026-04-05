@@ -107,9 +107,13 @@ export function ArticleForm({ sections, article, galleryImages, contributors, sa
   const [coverError, setCoverError] = useState<string | null>(null)
   const coverFileRef = useRef<HTMLInputElement>(null)
 
-  // Vložení obrázku ze schránky (Ctrl+V) — sledujeme globálně
+  // Vložení obrázku ze schránky (Ctrl+V) — jen pokud kurzor NENÍ v hlavním textovém editoru
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
+      // Přeskočit pokud je fokus uvnitř TipTap editoru (ten si paste zpracuje sám)
+      const active = document.activeElement
+      if (active && (active as HTMLElement).closest('.tiptap-editor')) return
+
       const items = Array.from(e.clipboardData?.items ?? [])
       const imageItem = items.find(i => i.type.startsWith('image/'))
       if (!imageItem) return

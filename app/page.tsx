@@ -50,11 +50,11 @@ export default async function HomePage() {
   const [{ data: newsArticles }, { data: uvodArticles }] = await Promise.all([
     supabase
       .from('pages')
-      .select('id, slug, title, excerpt, image_url, published_at, sections!inner(slug)')
+      .select('id, slug, title, excerpt, image_url, updated_at, sections!inner(slug)')
       .eq('is_active', true)
       .eq('is_news', true)
       .in('visibility', visibilities)
-      .order('published_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(3),
     supabase
       .from('pages')
@@ -111,7 +111,7 @@ export default async function HomePage() {
                         <h3 className="font-semibold text-gray-900 group-hover:text-green-700 transition-colors leading-snug mb-1">
                           {article.title}
                         </h3>
-                        <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.published_at)}</time>
+                        <time className="text-xs text-gray-400 mb-2 block">{formatDate(article.updated_at)}</time>
                         {article.excerpt && (
                           <div
                             className="text-sm text-gray-500 line-clamp-3 flex-1 excerpt-preview"

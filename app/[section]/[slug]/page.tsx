@@ -67,7 +67,7 @@ export default async function ArticlePage({ params }: Props) {
 
   const { data: page } = await supabase
     .from('pages')
-    .select('id, slug, title, excerpt, content, image_url, visibility, allow_comments, allow_poll, poll_question, poll_allow_multiple, published_at')
+    .select('id, slug, title, excerpt, content, image_url, visibility, allow_comments, allow_poll, poll_question, poll_allow_multiple, updated_at')
     .eq('section_id', section.id)
     .eq('slug', slug)
     .eq('is_active', true)
@@ -131,14 +131,30 @@ export default async function ArticlePage({ params }: Props) {
   ])
 
   // Hlasy z ankety — nutno načíst po options (potřebujeme IDs možností)
-  let pollVotes: { option_id: string; user_id: string; user_profiles: { full_name: string | null } | null }[] = []
+  // Hlasy + profily fetchujeme separátně, protože Supabase join přes auth.users není spolehlivý
+  type PollVoteRow = { id: string; option_id: string; user_id: string; voted_at: string; note: string | null; voterName: string | null }
+  let pollVotes: PollVoteRow[] = []
   if (page.allow_poll && pollOptions && pollOptions.length > 0) {
     const optionIds = pollOptions.map(o => o.id)
     const { data: votes } = await supabase
       .from('page_poll_votes')
-      .select('option_id, user_id, user_profiles(full_name)')
+      .select('id, option_id, user_id, voted_at, note')
       .in('option_id', optionIds)
-    pollVotes = (votes ?? []) as unknown as typeof pollVotes
+      .order('voted_at', { ascending: true })
+
+    if (votes && votes.length > 0) {
+      const voterIds = [...new Set(votes.map(v => v.user_id))]
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, full_name')
+        .in('id', voterIds)
+      const profileMap = new Map((profiles ?? []).map(p => [p.id, p.full_name]))
+      pollVotes = votes.map(v => ({
+        ...v,
+        note: v.note ?? null,
+        voterName: profileMap.get(v.user_id) ?? null,
+      }))
+    }
   }
 
   // Je uživatel contributor tohoto článku?
@@ -222,7 +238,7 @@ export default async function ArticlePage({ params }: Props) {
         </h1>
 
         <time className="block text-sm text-gray-400 mb-8">
-          {formatDate(page.published_at)}
+          Aktualizováno: {formatDate(page.updated_at)}
         </time>
 
         {page.content && (
@@ -285,7 +301,9 @@ export default async function ArticlePage({ params }: Props) {
                 .filter(v => v.option_id === opt.id)
                 .map(v => ({
                   user_id: v.user_id,
-                  name: (v.user_profiles as { full_name: string | null } | null)?.full_name ?? null,
+                  name: v.voterName,
+                  voted_at: v.voted_at,
+                  note: v.note,
                 })),
             }))}
             userId={user?.id ?? null}

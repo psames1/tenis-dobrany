@@ -119,11 +119,10 @@ export default async function SectionPage({ params }: Props) {
 
   const pagesQuery = supabase
     .from('pages')
-    .select('id, slug, title, excerpt, content, image_url, published_at, is_members_only, section_id, sections(id, slug, title)')
+    .select('id, slug, title, excerpt, content, image_url, updated_at, is_members_only, section_id, sections(id, slug, title)')
     .eq('is_active', true)
     .in('visibility', visibilities)
-    .order('sort_order', { ascending: false })
-    .order('published_at', { ascending: false })
+    .order('updated_at', { ascending: false })
 
   const subsectionIds = subsections.map(s => s.id)
   if (isAktuality) {
@@ -209,7 +208,7 @@ export default async function SectionPage({ params }: Props) {
                 {/* Text */}
                 <div className="p-5 flex flex-col justify-center flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <time className="text-xs text-gray-400">{formatDate(article.published_at)}</time>
+                    <time className="text-xs text-gray-400">{formatDate(article.updated_at)}</time>
                     {fromSubsection && (
                       <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600 rounded-full">
                         {fromSubsection.title}
