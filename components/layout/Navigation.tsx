@@ -18,7 +18,7 @@ export async function Navigation() {
   const [{ data: sections }, { data: menuPages }, { data: { user } }, { data: headerComponents }] = await Promise.all([
     supabase
       .from('sections')
-      .select('id, slug, title, menu_title, menu_url, menu_parent_id')
+      .select('id, slug, title, menu_title, menu_url, menu_parent_id, visibility')
       .eq('is_active', true)
       .eq('show_in_menu', true)
       .order('menu_order'),
@@ -64,15 +64,17 @@ export async function Navigation() {
   }
 
   // Seskup podsekce podle jejich menu_parent_id
+  const visibleSections = (sections ?? []).filter(s => allowedVis.includes(s.visibility ?? 'public'))
+
   const subsectionsByParent = new Map<string, NonNullable<typeof sections>>()
-  for (const s of (sections ?? [])) {
+  for (const s of visibleSections) {
     if (!s.menu_parent_id) continue
     if (!subsectionsByParent.has(s.menu_parent_id)) subsectionsByParent.set(s.menu_parent_id, [])
     subsectionsByParent.get(s.menu_parent_id)!.push(s)
   }
 
   // Top-level sekce s volitelnými dětmi (podsekce + stránky v podmenu)
-  const navItems: NavItem[] = (sections ?? [])
+  const navItems: NavItem[] = visibleSections
     .filter(s => !s.menu_parent_id)
     .map(s => {
       const sectionSlug = s.slug

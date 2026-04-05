@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, buildArticleEmailHtml, stripHtml } from '@/lib/email'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
 // Převod názvu na URL-friendly slug (s podporou češtiny)
 function toSlug(text: string): string {
@@ -310,12 +311,17 @@ export async function createSection(formData: FormData) {
   const title = (formData.get('title') as string).trim()
   if (!title) redirect('/admin/sekce?error=missing_title')
 
-  const parentIdRaw = (formData.get('parent_id') as string | null)?.trim() || null
-  const parentId    = parentIdRaw || null
-  const visibility  = (formData.get('visibility') as string | null) ?? 'public'
+  const parentIdRaw  = (formData.get('parent_id') as string | null)?.trim() || null
+  const parentId     = parentIdRaw || null
+  const visibility   = (formData.get('visibility') as string | null) ?? 'public'
+  const showInMenu   = formData.get('show_in_menu') === '1'
+  const isActive     = formData.get('is_active') === '1'
 
   const slug = toSlug(title)
-  const { error } = await supabase.from('sections').insert({ title, slug, menu_parent_id: parentId, visibility })
+  const { error } = await supabase.from('sections').insert({
+    title, slug, menu_parent_id: parentId, visibility,
+    show_in_menu: showInMenu, is_active: isActive,
+  })
 
   if (error) {
     redirect(`/admin/sekce?error=${encodeURIComponent(error.message)}`)
@@ -355,6 +361,43 @@ export async function deleteSection(formData: FormData) {
   }
 
   await supabase.from('sections').delete().eq('id', id)
+  redirect('/admin/sekce?success=1')
+}
+
+// ─── Uložit oprávnění skupiny na sekci (ze stránky sekce) ───────────────────
+
+export async function saveSectionGroupPermissions(formData: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('user_profiles').select('role').eq('id', user.id).single()
+  if (!profile || profile.role !== 'admin') redirect('/admin/sekce?error=forbidden')
+
+  const groupId   = formData.get('group_id')   as string
+  const sectionId = formData.get('section_id') as string
+  const canCreate     = formData.get('can_create_articles')    === '1'
+  const canEdit       = formData.get('can_edit_articles')      === '1'
+  const canDelete     = formData.get('can_delete_articles')    === '1'
+  const canSubsection = formData.get('can_create_subsections') === '1'
+
+  if (!groupId || !sectionId) redirect('/admin/sekce?error=missing_data')
+
+  if (!canCreate && !canEdit && !canDelete && !canSubsection) {
+    await supabase.from('section_group_permissions')
+      .delete().eq('group_id', groupId).eq('section_id', sectionId)
+  } else {
+    const { error } = await supabase.from('section_group_permissions').upsert({
+      group_id: groupId, section_id: sectionId,
+      can_create_articles: canCreate, can_edit_articles: canEdit,
+      can_delete_articles: canDelete, can_create_subsections: canSubsection,
+    }, { onConflict: 'group_id,section_id' })
+    if (error) redirect(`/admin/sekce?error=${encodeURIComponent(error.message)}`)
+  }
+
+  revalidatePath('/admin/sekce')
   redirect('/admin/sekce?success=1')
 }
 
