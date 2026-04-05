@@ -48,7 +48,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     .from('sections')
     .select('id, slug, title, menu_parent_id')
     .eq('is_active', true)
-    .order('menu_order')
+    .order('menu_order', { ascending: false })
 
   // Stávající oprávnění skupiny
   const { data: permissions } = await supabase

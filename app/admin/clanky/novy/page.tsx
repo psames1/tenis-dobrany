@@ -15,7 +15,7 @@ export default async function NovyClankPage({
     .from('sections')
     .select('id, slug, title')
     .eq('is_active', true)
-    .order('menu_order')
+    .order('menu_order', { ascending: false })
 
   const defaultSectionId = sectionSlug
     ? (sections ?? []).find(s => s.slug === sectionSlug)?.id

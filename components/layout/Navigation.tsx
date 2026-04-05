@@ -21,7 +21,7 @@ export async function Navigation() {
       .select('id, slug, title, menu_title, menu_url, menu_parent_id, visibility')
       .eq('is_active', true)
       .eq('show_in_menu', true)
-      .order('menu_order'),
+      .order('menu_order', { ascending: false }),
     supabase
       .from('pages')
       .select('id, title, slug, section_id, visibility')

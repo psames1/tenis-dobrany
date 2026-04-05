@@ -14,7 +14,7 @@ export default async function AdminArticlesPage({
   const supabase = await createClient()
 
   const [{ data: sections }, { data: pages }] = await Promise.all([
-    supabase.from('sections').select('id, slug, title').eq('is_active', true).order('menu_order'),
+    supabase.from('sections').select('id, slug, title').eq('is_active', true).order('menu_order', { ascending: false }),
     supabase
       .from('pages')
       .select('id, title, slug, excerpt, is_active, is_members_only, show_in_menu, sort_order, published_at, sections(title, slug)')

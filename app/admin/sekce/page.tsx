@@ -17,7 +17,7 @@ export default async function AdminSekce({
     supabase
       .from('sections')
       .select('id, slug, title, menu_title, description, menu_order, show_in_menu, is_active, menu_parent_id, visibility')
-      .order('menu_order'),
+      .order('menu_order', { ascending: false }),
     supabase
       .from('user_groups')
       .select('id, name')

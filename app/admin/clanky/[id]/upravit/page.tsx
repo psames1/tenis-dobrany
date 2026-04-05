@@ -26,7 +26,7 @@ export default async function EditArticlePage({ params, searchParams }: Props & 
       .from('sections')
       .select('id, slug, title')
       .eq('is_active', true)
-      .order('menu_order'),
+      .order('menu_order', { ascending: false }),
     supabase
       .from('page_gallery')
       .select('id, public_url, alt_text, sort_order')
