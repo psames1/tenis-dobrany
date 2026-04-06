@@ -42,13 +42,25 @@ function formatVotedAt(dateStr: string) {
   })
 }
 
-/** Avatar: foto nebo inicialy + tooltip s jmenem a poznamkou */
+/** Avatar: foto nebo inicialy + tooltip (vlevo pro sm, nahoru pro md) + klik pro mobile */
 function VoterAvatar({ voter, size = 'md' }: { voter: Voter; size?: 'sm' | 'md' }) {
+  const [pinned, setPinned] = useState(false)
   const initials = getInitials(voter.name)
   const dim = size === 'sm' ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'
+  // sm (uvnitr tlacitka): tooltip vlevo od avataru, sipka doprava
+  // md (panel hlasujicich): tooltip nahoru, sipka dolu
+  const tooltipPos = size === 'sm'
+    ? 'right-full top-1/2 -translate-y-1/2 mr-2'
+    : 'bottom-full left-1/2 -translate-x-1/2 mb-2'
+  const arrowCls = size === 'sm'
+    ? 'absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-gray-900'
+    : 'absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900'
   return (
-    <div className="relative group">
-      <div className={`${dim} rounded-full border border-green-200 flex items-center justify-center font-semibold text-green-800 cursor-default select-none shrink-0 overflow-hidden bg-green-100`}>
+    <div
+      className="relative group"
+      onClick={e => { e.stopPropagation(); setPinned(v => !v) }}
+    >
+      <div className={`${dim} rounded-full border border-green-200 flex items-center justify-center font-semibold text-green-800 cursor-pointer select-none shrink-0 overflow-hidden bg-green-100`}>
         {voter.avatar_url
           ? <img src={voter.avatar_url} alt={voter.name ?? ''} className="w-full h-full object-cover" />
           : voter.name
@@ -56,13 +68,13 @@ function VoterAvatar({ voter, size = 'md' }: { voter: Voter; size?: 'sm' | 'md' 
             : <User size={size === 'sm' ? 10 : 14} className="text-green-600" />
         }
       </div>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-20 pointer-events-none">
+      <div className={`absolute ${tooltipPos} z-20 pointer-events-none ${pinned ? 'block' : 'hidden group-hover:block'}`}>
         <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl w-max max-w-[200px]">
           <p className="font-medium leading-snug">{voter.name ?? 'Anonym'}</p>
           {voter.note?.trim() && (
             <p className="text-gray-300 mt-1 leading-snug italic">{`\u201e${voter.note}\u201c`}</p>
           )}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+          <div className={arrowCls} />
         </div>
       </div>
     </div>
@@ -74,12 +86,20 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
   const [localError, setLocalError] = useState<string | null>(null)
   const [pendingVoteId, setPendingVoteId] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState('')
-  const [showVoters, setShowVoters] = useState(false)
+  const [openDetails, setOpenDetails] = useState<Set<string>>(new Set())
 
   const totalVotes = options.reduce((sum, o) => sum + o.voters.length, 0)
   const myVoteIds = new Set(
     options.filter(o => o.voters.some(v => v.user_id === userId)).map(o => o.id)
   )
+
+  function toggleDetail(optId: string) {
+    setOpenDetails(prev => {
+      const next = new Set(prev)
+      if (next.has(optId)) { next.delete(optId) } else { next.add(optId) }
+      return next
+    })
+  }
 
   function handleOptionClick(optionId: string) {
     if (!userId || isPending) return
@@ -106,10 +126,6 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
     })
   }
 
-  const allVoters = options
-    .flatMap(opt => opt.voters.map(v => ({ ...v, optionLabel: opt.label })))
-    .sort((a, b) => new Date(a.voted_at).getTime() - new Date(b.voted_at).getTime())
-
   return (
     <div className={`mt-10 pt-6 border-t border-gray-100 ${isPending ? 'opacity-70 pointer-events-none' : ''}`}>
       <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800 mb-1">
@@ -125,14 +141,15 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
           const isVoted = myVoteIds.has(opt.id)
           const count = opt.voters.length
           const isPendingThis = pendingVoteId === opt.id
+          const isDetailOpen = openDetails.has(opt.id)
 
           return (
-            <div key={opt.id}>
+            <div key={opt.id} className="space-y-1">
               <button
                 type="button"
                 disabled={!userId || isPending || (!!pendingVoteId && !isPendingThis)}
                 onClick={() => handleOptionClick(opt.id)}
-                className={`w-full text-left relative rounded-xl border overflow-hidden transition-all
+                className={`w-full text-left relative rounded-xl border transition-all
                   ${userId && (!pendingVoteId || isPendingThis) ? 'cursor-pointer hover:border-green-400' : 'cursor-default'}
                   ${isVoted ? 'border-green-400 bg-green-50' : isPendingThis ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white hover:bg-gray-50'}
                 `}
@@ -195,6 +212,36 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
                   </div>
                 </div>
               )}
+
+              {count > 0 && !isPendingThis && (
+                <button
+                  type="button"
+                  onClick={() => toggleDetail(opt.id)}
+                  className="flex items-center gap-1 px-2 py-0.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {isDetailOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  <span>{isDetailOpen ? 'Skrýt' : 'Kdo hlasoval'} ({count})</span>
+                </button>
+              )}
+
+              {isDetailOpen && (
+                <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  {opt.voters.map((v, i) => (
+                    <div key={i} className={`px-4 py-2.5 flex items-start gap-3 ${i < opt.voters.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                      <VoterAvatar voter={v} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-gray-800">{v.name ?? 'Anonym'}</span>
+                          <time className="shrink-0 text-xs text-gray-400">{formatVotedAt(v.voted_at)}</time>
+                        </div>
+                        {v.note?.trim() && (
+                          <p className="mt-0.5 text-xs text-gray-600 italic">{`\u201e${v.note}\u201c`}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}
@@ -210,39 +257,6 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
       )}
 
       {localError && <p className="mt-3 text-sm text-red-500">{localError}</p>}
-
-      {totalVotes > 0 && (
-        <div className="mt-5 border border-gray-100 rounded-xl overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setShowVoters(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-          >
-            <span>Kdo hlasoval ({totalVotes})</span>
-            {showVoters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-
-          {showVoters && (
-            <div className="divide-y divide-gray-100 border-t border-gray-100">
-              {allVoters.map((v, i) => (
-                <div key={i} className="px-4 py-3 flex items-start gap-3">
-                  <VoterAvatar voter={v} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-gray-800">{v.name ?? 'Anonym'}</span>
-                      <time className="shrink-0 text-xs text-gray-400">{formatVotedAt(v.voted_at)}</time>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{`\u2192 ${v.optionLabel}`}</p>
-                    {v.note?.trim() && (
-                      <p className="mt-1 text-xs text-gray-600 italic">{`\u201e${v.note}\u201c`}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
