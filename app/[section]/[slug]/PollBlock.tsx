@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useTransition, useState } from 'react'
 import { BarChart2, ChevronDown, ChevronUp, User } from 'lucide-react'
@@ -9,6 +9,7 @@ type Voter = {
   name: string | null
   voted_at: string
   note: string | null
+  avatar_url: string | null
 }
 
 type PollOption = {
@@ -34,23 +35,33 @@ function getInitials(name: string | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-/** Kolečko s iniciálami a tooltip při najetí */
-function VoterAvatar({ voter }: { voter: Voter }) {
+function formatVotedAt(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('cs-CZ', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+/** Avatar: foto nebo inicialy + tooltip s jmenem a poznamkou */
+function VoterAvatar({ voter, size = 'md' }: { voter: Voter; size?: 'sm' | 'md' }) {
   const initials = getInitials(voter.name)
-  const hasNote = !!voter.note?.trim()
+  const dim = size === 'sm' ? 'w-6 h-6 text-[10px]' : 'w-8 h-8 text-xs'
   return (
     <div className="relative group">
-      <div className="w-8 h-8 rounded-full bg-green-100 border border-green-200 flex items-center justify-center text-xs font-semibold text-green-800 cursor-default select-none shrink-0">
-        {voter.name ? initials : <User size={14} className="text-green-600" />}
+      <div className={`${dim} rounded-full border border-green-200 flex items-center justify-center font-semibold text-green-800 cursor-default select-none shrink-0 overflow-hidden bg-green-100`}>
+        {voter.avatar_url
+          ? <img src={voter.avatar_url} alt={voter.name ?? ''} className="w-full h-full object-cover" />
+          : voter.name
+            ? <span>{initials}</span>
+            : <User size={size === 'sm' ? 10 : 14} className="text-green-600" />
+        }
       </div>
-      {/* Tooltip */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-20 pointer-events-none">
         <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl w-max max-w-[200px]">
           <p className="font-medium leading-snug">{voter.name ?? 'Anonym'}</p>
-          {hasNote && (
-            <p className="text-gray-300 mt-1 leading-snug italic">„{voter.note}"</p>
+          {voter.note?.trim() && (
+            <p className="text-gray-300 mt-1 leading-snug italic">{`\u201e${voter.note}\u201c`}</p>
           )}
-          {/* Šipka dolů */}
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
         </div>
       </div>
@@ -72,10 +83,7 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
 
   function handleOptionClick(optionId: string) {
     if (!userId || isPending) return
-    if (myVoteIds.has(optionId)) {
-      submitVote(optionId, '', true)
-      return
-    }
+    if (myVoteIds.has(optionId)) { submitVote(optionId, '', true); return }
     setPendingVoteId(optionId)
     setPendingNote('')
   }
@@ -90,7 +98,6 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
     fd.set('allow_multiple', allowMultiple ? '1' : '0')
     if (unvote) fd.set('unvote', '1')
     if (note.trim()) fd.set('note', note.trim())
-
     startTransition(async () => {
       const result = await castPollVote(fd)
       if (result?.error) setLocalError(result.error)
@@ -98,6 +105,10 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
       setPendingNote('')
     })
   }
+
+  const allVoters = options
+    .flatMap(opt => opt.voters.map(v => ({ ...v, optionLabel: opt.label })))
+    .sort((a, b) => new Date(a.voted_at).getTime() - new Date(b.voted_at).getTime())
 
   return (
     <div className={`mt-10 pt-6 border-t border-gray-100 ${isPending ? 'opacity-70 pointer-events-none' : ''}`}>
@@ -123,23 +134,16 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
                 onClick={() => handleOptionClick(opt.id)}
                 className={`w-full text-left relative rounded-xl border overflow-hidden transition-all
                   ${userId && (!pendingVoteId || isPendingThis) ? 'cursor-pointer hover:border-green-400' : 'cursor-default'}
-                  ${isVoted
-                    ? 'border-green-400 bg-green-50'
-                    : isPendingThis
-                      ? 'border-green-300 bg-green-50/50'
-                      : 'border-gray-200 bg-white hover:bg-gray-50'}
+                  ${isVoted ? 'border-green-400 bg-green-50' : isPendingThis ? 'border-green-300 bg-green-50/50' : 'border-gray-200 bg-white hover:bg-gray-50'}
                 `}
               >
-                {/* Progress bar na pozadí */}
                 {totalVotes > 0 && (
                   <div
                     className={`absolute inset-y-0 left-0 transition-all duration-500 rounded-xl ${isVoted ? 'bg-green-100' : 'bg-gray-100'}`}
                     style={{ width: `${Math.round((count / totalVotes) * 100)}%` }}
                   />
                 )}
-
                 <div className="relative px-4 py-3 flex items-center gap-3">
-                  {/* Checkbox indikátor */}
                   <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors
                     ${isVoted ? 'border-green-500 bg-green-500' : isPendingThis ? 'border-green-300' : 'border-gray-300'}
                   `}>
@@ -149,20 +153,25 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
                       </svg>
                     )}
                   </div>
-
-                  {/* Název volby */}
                   <span className={`flex-1 text-sm font-medium ${isVoted ? 'text-green-800' : 'text-gray-800'}`}>
                     {opt.label}
                   </span>
-
-                  {/* Počet — jen číslo */}
-                  <span className={`shrink-0 text-sm font-semibold tabular-nums ${isVoted ? 'text-green-700' : 'text-gray-500'}`}>
-                    {count}
-                  </span>
+                  <div className="shrink-0 flex items-center gap-1">
+                    {opt.voters.slice(0, 5).map((v, i) => (
+                      <VoterAvatar key={i} voter={v} size="sm" />
+                    ))}
+                    {opt.voters.length > 5 && (
+                      <span className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-500">
+                        +{opt.voters.length - 5}
+                      </span>
+                    )}
+                    <span className={`text-sm font-semibold tabular-nums ml-1.5 ${isVoted ? 'text-green-700' : 'text-gray-500'}`}>
+                      {count}
+                    </span>
+                  </div>
                 </div>
               </button>
 
-              {/* Inline formulář pro poznámku */}
               {isPendingThis && (
                 <div className="mt-1 ml-1 p-3 bg-green-50 border border-green-200 rounded-xl">
                   <p className="text-xs text-green-700 font-medium mb-2">Volitelně přidejte poznámku:</p>
@@ -191,10 +200,7 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
         })}
       </div>
 
-      {/* Celkový součet */}
-      {totalVotes > 0 && (
-        <p className="mt-3 text-xs text-gray-400">Celkem: {totalVotes}</p>
-      )}
+      {totalVotes > 0 && <p className="mt-3 text-xs text-gray-400">Celkem: {totalVotes}</p>}
 
       {!userId && (
         <p className="mt-4 text-sm text-gray-400">
@@ -205,30 +211,31 @@ export function PollBlock({ pageId, question, options, allowMultiple, userId, se
 
       {localError && <p className="mt-3 text-sm text-red-500">{localError}</p>}
 
-      {/* Panel hlasujících — avatary s iniciálami */}
       {totalVotes > 0 && (
-        <div className="mt-5 border border-gray-100 rounded-xl overflow-visible">
+        <div className="mt-5 border border-gray-100 rounded-xl overflow-hidden">
           <button
             type="button"
             onClick={() => setShowVoters(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-xl"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
           >
             <span>Kdo hlasoval ({totalVotes})</span>
             {showVoters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
 
           {showVoters && (
-            <div className="border-t border-gray-100 px-4 py-3 space-y-3">
-              {options.filter(o => o.voters.length > 0).map(opt => (
-                <div key={opt.id}>
-                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1.5">
-                    {opt.label}
-                    <span className="ml-1.5 font-normal normal-case">({opt.voters.length})</span>
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {opt.voters.map((v, i) => (
-                      <VoterAvatar key={`${opt.id}-${i}`} voter={v} />
-                    ))}
+            <div className="divide-y divide-gray-100 border-t border-gray-100">
+              {allVoters.map((v, i) => (
+                <div key={i} className="px-4 py-3 flex items-start gap-3">
+                  <VoterAvatar voter={v} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-800">{v.name ?? 'Anonym'}</span>
+                      <time className="shrink-0 text-xs text-gray-400">{formatVotedAt(v.voted_at)}</time>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{`\u2192 ${v.optionLabel}`}</p>
+                    {v.note?.trim() && (
+                      <p className="mt-1 text-xs text-gray-600 italic">{`\u201e${v.note}\u201c`}</p>
+                    )}
                   </div>
                 </div>
               ))}

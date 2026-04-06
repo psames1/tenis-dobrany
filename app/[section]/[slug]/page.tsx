@@ -151,7 +151,7 @@ export default async function ArticlePage({ params }: Props) {
 
   // Hlasy z ankety — nutno načíst po options (potřebujeme IDs možností)
   // Hlasy + profily fetchujeme separátně, protože Supabase join přes auth.users není spolehlivý
-  type PollVoteRow = { id: string; option_id: string; user_id: string; voted_at: string; note: string | null; voterName: string | null }
+  type PollVoteRow = { id: string; option_id: string; user_id: string; voted_at: string; note: string | null; voterName: string | null; voterAvatar: string | null }
   let pollVotes: PollVoteRow[] = []
   if (page.allow_poll && pollOptions && pollOptions.length > 0) {
     const optionIds = pollOptions.map(o => o.id)
@@ -165,13 +165,14 @@ export default async function ArticlePage({ params }: Props) {
       const voterIds = [...new Set(votes.map(v => v.user_id))]
       const { data: profiles } = await supabase
         .from('user_profiles')
-        .select('id, full_name')
+        .select('id, full_name, avatar_url')
         .in('id', voterIds)
-      const profileMap = new Map((profiles ?? []).map(p => [p.id, p.full_name]))
+      const profileMap = new Map((profiles ?? []).map(p => [p.id, { name: p.full_name, avatar: p.avatar_url }]))
       pollVotes = votes.map(v => ({
         ...v,
         note: v.note ?? null,
-        voterName: profileMap.get(v.user_id) ?? null,
+        voterName: profileMap.get(v.user_id)?.name ?? null,
+        voterAvatar: profileMap.get(v.user_id)?.avatar ?? null,
       }))
     }
   }
@@ -323,6 +324,7 @@ export default async function ArticlePage({ params }: Props) {
                   name: v.voterName,
                   voted_at: v.voted_at,
                   note: v.note,
+                  avatar_url: v.voterAvatar,
                 })),
             }))}
             userId={user?.id ?? null}
