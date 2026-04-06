@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Členská sekce – Profil' }
 
-type SearchParams = Promise<{ success?: string; error?: string }>
+type SearchParams = Promise<{ success?: string; error?: string; setup?: string; welcome?: string }>
 
 export default async function ProfilePage({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient()
@@ -19,7 +19,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
     .eq('id', user.id)
     .single()
 
-  const { success, error } = await searchParams
+  const { success, error, setup, welcome } = await searchParams
 
   const ROLE_LABELS: Record<string, string> = {
     admin:   'Admin',
@@ -37,6 +37,17 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
         fullName={profile?.full_name}
         email={profile?.email ?? user.email ?? ''}
       />
+      {/* Banners */}
+      {welcome === '1' && (
+        <div className="mb-5 px-4 py-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-sm">
+          👋 <strong>Vítejte v členské sekci!</strong> Doporučujeme nastavit si heslo pro budoucí přihlášení.
+        </div>
+      )}
+      {setup === 'heslo' && (
+        <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm">
+          🔑 <strong>Nastavte si nové heslo</strong> pomocí formuláře níže.
+        </div>
+      )}
       {success && (
         <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
           ✓ Profil byl uložen.

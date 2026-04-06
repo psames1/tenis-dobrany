@@ -21,11 +21,19 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
 
   const code = searchParams.get('code')
+  const type = searchParams.get('type') // 'recovery' | 'invite' | null
   const next = searchParams.get('next') ?? '/'
   // Guard against open-redirect: only allow relative paths
   const safeNext = next.startsWith('/') ? next : '/'
 
-  console.log('[callback] code present:', !!code, '| next:', safeNext, '| origin:', origin)
+  // Po resetu hesla → profil (kde si uživatel nastaví nové heslo přes ChangePasswordForm)
+  // Po pozvánce → profil (první přihlášení, doporučíme nastavit heslo)
+  const resolvedNext =
+    type === 'recovery' ? '/clenove/profil?setup=heslo' :
+    type === 'invite'   ? '/clenove/profil?welcome=1' :
+    safeNext
+
+  console.log('[callback] code present:', !!code, '| type:', type, '| next:', resolvedNext, '| origin:', origin)
 
   if (!code) {
     console.warn('[callback] no code param in URL')
@@ -124,7 +132,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.redirect(new URL(safeNext, origin))
+    return NextResponse.redirect(new URL(resolvedNext, origin))
   }
 
   return NextResponse.redirect(

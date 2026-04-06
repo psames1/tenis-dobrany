@@ -60,7 +60,7 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(
-    urlError === 'auth'      ? 'Přihlášení selhalo. Zkuste to znovu.'
+    urlError === 'auth'      ? 'Přihlášení selhalo. Odkaz z pozvánky mohl vypršet nebo být již použit — kontaktujte správce pro nové zaslání.'
     : urlError === 'uninvited' ? 'Přihlášení zamítnuto. Váš účet nebyl pozván správcem oddílu. Kontaktujte správce pro udělení přístupu.'
     : null
   )
