@@ -98,33 +98,50 @@ export async function GET(request: Request) {
         return NextResponse.redirect(new URL('/login?error=uninvited', origin))
       }
 
-      // Auto-enroll uživatele do organizace podle subdomény (pokud ještě není členem)
+      // Auto-enroll uživatele do organizace podle subdomény nebo vlastní domény (pokud ještě není členem)
       try {
         const headersList = await headers()
         const orgSlug = headersList.get('x-org-slug')
+        const hostname = headersList.get('x-hostname') ?? ''
+        const isCustomDomain = headersList.get('x-org-custom-domain') === '1'
+
+        const adminClient = createAdminClient()
+        let orgId: string | null = null
+
         if (orgSlug) {
-          const adminClient = createAdminClient()
           const { data: org } = await adminClient
             .from('app_organizations')
             .select('id')
             .eq('slug', orgSlug)
             .eq('is_active', true)
             .single()
-          if (org) {
-            // ignoreDuplicates: true = při konfliktu (user_id, org) nic nezmění (zachová vyšší roli)
-            await adminClient
-              .from('app_organization_members')
-              .upsert(
-                { organization_id: org.id, user_id: user.id, role: 'player', is_active: true },
-                { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
-              )
-            // Nastav default_organization_id, pokud ještě není
-            await adminClient
-              .from('user_profiles')
-              .update({ default_organization_id: org.id })
-              .eq('id', user.id)
-              .is('default_organization_id', null)
-          }
+          orgId = org?.id ?? null
+        } else if (isCustomDomain && hostname) {
+          // Vlastní doména: tenis-dobrany.cz nebo www.tenis-dobrany.cz
+          const baseDomain = hostname.replace(/^www\./, '')
+          const { data: org } = await adminClient
+            .from('app_organizations')
+            .select('id')
+            .eq('custom_domain', baseDomain)
+            .eq('is_active', true)
+            .single()
+          orgId = org?.id ?? null
+        }
+
+        if (orgId) {
+          // ignoreDuplicates: true = při konfliktu (user_id, org) nic nezmění (zachová vyšší roli)
+          await adminClient
+            .from('app_organization_members')
+            .upsert(
+              { organization_id: orgId, user_id: user.id, role: 'player', is_active: true },
+              { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
+            )
+          // Nastav default_organization_id, pokud ještě není
+          await adminClient
+            .from('user_profiles')
+            .update({ default_organization_id: orgId })
+            .eq('id', user.id)
+            .is('default_organization_id', null)
         }
       } catch (enrollError) {
         // Logovat ale nepřerušit — přihlášení proběhne i bez auto-enrollu
