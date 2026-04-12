@@ -12,6 +12,7 @@ type Props = {
 
 export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDomain }: Props) {
   const [domain, setDomain] = useState(currentDomain ?? '')
+  const [savedDomain, setSavedDomain] = useState(currentDomain)
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null)
 
@@ -26,6 +27,9 @@ export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDom
     const res = await saveCustomDomain(orgId, cleanDomain || null)
     setResult(res)
     setSaving(false)
+    if (res.success) {
+      setSavedDomain(cleanDomain || null)
+    }
   }
 
   return (
@@ -44,12 +48,12 @@ export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDom
               {defaultSubdomain}
             </a>
           </div>
-          {currentDomain && (
+          {savedDomain && (
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
               <span className="text-gray-500">Vlastní doména</span>
-              <a href={`https://${currentDomain}`} target="_blank" rel="noopener noreferrer"
+              <a href={`https://${savedDomain}`} target="_blank" rel="noopener noreferrer"
                 className="text-green-600 font-mono text-xs hover:underline">
-                {currentDomain}
+                {savedDomain}
               </a>
             </div>
           )}
@@ -88,6 +92,26 @@ export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDom
             >
               {saving ? 'Ukládám…' : 'Uložit doménu'}
             </button>
+            {savedDomain && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true)
+                  setResult(null)
+                  const res = await saveCustomDomain(orgId, null)
+                  setResult(res)
+                  setSaving(false)
+                  if (res.success) {
+                    setDomain('')
+                    setSavedDomain(null)
+                  }
+                }}
+                className="px-5 py-2 bg-red-50 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-100 disabled:opacity-50 transition-colors"
+              >
+                Odebrat doménu
+              </button>
+            )}
             {result && (
               <span className={`text-sm ${result.success ? 'text-green-600' : 'text-red-600'}`}>
                 {result.success ? '✓ Uloženo' : `✗ ${result.error}`}
@@ -106,13 +130,14 @@ export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDom
         </p>
 
         <div className="space-y-4">
-          {/* CNAME pro www */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-800 mb-2">
-              Varianta A — www subdoména (doporučeno)
+          {/* CNAME pro www — doporučeno */}
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <h3 className="text-sm font-semibold text-green-800 mb-2">
+              ✅ Krok 1 — CNAME pro www (povinné)
             </h3>
-            <p className="text-xs text-gray-500 mb-3">
-              Pokud chcete web na <span className="font-mono">www.vase-domena.cz</span>:
+            <p className="text-xs text-green-700 mb-3">
+              Nastavte u svého registrátora tento záznam.
+              Stačí pouze to a web poběží na <span className="font-mono">www.vase-domena.cz</span>.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -136,13 +161,15 @@ export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDom
             </div>
           </div>
 
-          {/* A záznam pro apex */}
+          {/* A záznam pro apex — volitelný */}
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-gray-800 mb-2">
-              Varianta B — holá doména (apex)
+              Krok 2 — A záznam pro holou doménu (volitelné)
             </h3>
             <p className="text-xs text-gray-500 mb-3">
-              Pokud chcete web přímo na <span className="font-mono">vase-domena.cz</span> (bez www):
+              Pokud chcete, aby fungovala i adresa bez www
+              (např. <span className="font-mono">vase-domena.cz</span> → přesměruje na www),
+              přidejte <strong>A záznam</strong>. Holé domény nemohou mít CNAME — proto je nutný A záznam.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -166,13 +193,13 @@ export default function DomainSettingsForm({ orgId, orgName, orgSlug, currentDom
             </div>
           </div>
 
-          {/* Oba současně */}
-          <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
-            <p className="font-medium mb-1">💡 Tip</p>
+          {/* Důležitá poznámka */}
+          <div className="bg-amber-50 rounded-lg p-4 text-sm text-amber-700">
+            <p className="font-medium mb-1">⚠️ Proč to ukazuje &quot;Invalid Configuration&quot;?</p>
             <p className="text-xs leading-relaxed">
-              Nejlepší je nastavit <strong>oba záznamy současně</strong> — A záznam pro apex a CNAME pro www.
-              V Dashboardu Vercel (Settings → Domains) pak přidejte vaši doménu a Vercel automaticky
-              zajistí SSL certifikát a přesměrování.
+              Pokud máte ve Vercelu přidanou holou doménu (<span className="font-mono">vase-domena.cz</span>)
+              bez A záznamu v DNS, Vercel zobrazí chybu. Buď přidejte A záznam (viz výše),
+              nebo holou doménu z Vercel dashboardu odeberte — CNAME pro www bude fungovat samostatně.
             </p>
           </div>
 
