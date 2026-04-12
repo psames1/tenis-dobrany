@@ -23,15 +23,17 @@ const ADMIN_ONLY = [
 
 const NASTAVENI_NAV = [
   { href: '/admin/nastaveni/email', label: 'Email' },
+  { href: '/admin/nastaveni/domena', label: 'Doména' },
 ]
 
 type Props = {
   role: string
   name: string
+  orgName: string | null
   onClose?: () => void
 }
 
-export function AdminSidebar({ role, name, onClose }: Props) {
+export function AdminSidebar({ role, name, orgName, onClose }: Props) {
   const pathname = usePathname()
 
   // Zavřít mobilní drawer po navigaci
@@ -50,7 +52,7 @@ export function AdminSidebar({ role, name, onClose }: Props) {
       <div className="flex items-start justify-between border-b border-green-800 px-4 py-5">
         <div className="min-w-0">
           <Link href="/" className="text-sm font-bold text-white hover:text-green-200 transition-colors">
-            🎾 TJ Dobřany
+            🎾 {orgName ?? 'Administrace'}
           </Link>
           <div className="mt-1 truncate text-xs text-green-400">{name}</div>
           <div className="mt-0.5 text-xs capitalize text-green-500">{role}</div>

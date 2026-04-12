@@ -136,8 +136,8 @@ export default function EmailSettingsForm({
               </div>
 
               <div className="border-t border-gray-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Jméno odesílatele" value={smtpFromName} onChange={setSmtpFromName} placeholder="TJ Dobřany" />
-                <Field label="Email odesílatele" value={smtpFromEmail} onChange={setSmtpFromEmail} placeholder="info@tj-dobrany.cz" type="email" />
+                <Field label="Jméno odesílatele" value={smtpFromName} onChange={setSmtpFromName} placeholder={orgName || 'Název organizace'} />
+                <Field label="Email odesílatele" value={smtpFromEmail} onChange={setSmtpFromEmail} placeholder="info@vase-domena.cz" type="email" />
               </div>
 
               <div className="flex items-center gap-3">

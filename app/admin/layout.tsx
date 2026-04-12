@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AdminShell } from './AdminShell'
+import { getOrganization } from '@/lib/organization'
 
 export default async function AdminLayout({
   children,
@@ -22,8 +23,10 @@ export default async function AdminLayout({
     redirect('/?error=forbidden')
   }
 
+  const org = await getOrganization()
+
   return (
-    <AdminShell role={profile.role} name={profile.full_name ?? profile.email ?? ''}>
+    <AdminShell role={profile.role} name={profile.full_name ?? profile.email ?? ''} orgName={org?.name ?? null}>
       {children}
     </AdminShell>
   )

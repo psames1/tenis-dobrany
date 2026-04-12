@@ -7,9 +7,10 @@ type Props = {
   children: React.ReactNode
   role: string
   name: string
+  orgName: string | null
 }
 
-export function AdminShell({ children, role, name }: Props) {
+export function AdminShell({ children, role, name, orgName }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -31,7 +32,7 @@ export function AdminShell({ children, role, name }: Props) {
           'lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:z-auto lg:shrink-0',
         ].join(' ')}
       >
-        <AdminSidebar role={role} name={name} onClose={() => setMobileOpen(false)} />
+        <AdminSidebar role={role} name={name} orgName={orgName} onClose={() => setMobileOpen(false)} />
       </div>
 
       {/* Hlavní obsah */}
