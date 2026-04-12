@@ -2,7 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendEmail, buildArticleEmailHtml, stripHtml } from '@/lib/email'
+import { sendEmail, getMailConfig } from '@/lib/email/mailer'
+import { buildArticleEmailHtml, stripHtml } from '@/lib/email/templates'
+import { getOrganization } from '@/lib/organization'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
@@ -236,15 +238,20 @@ export async function saveArticle(formData: FormData) {
         const isNewArticle = !id
         const subject = isNewArticle ? `Nový článek: ${title}` : `Aktualizace článku: ${title}`
         const previewText = excerpt ?? (content ? stripHtml(content) : null)
+        const org = await getOrganization()
+        const siteName = org?.name ?? 'SportKalendář'
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sportkalendar.cz'
         const html = buildArticleEmailHtml({
+          siteName,
+          siteUrl,
           title,
           excerpt: previewText,
           imageUrl,
           articleUrl,
           isNew: isNewArticle,
         })
-        const fromAddr = process.env.SMTP_FROM ?? 'noreply@tenis-dobrany.cz'
-        await sendEmail({ to: fromAddr, bcc: emails, subject, html })
+        const config = await getMailConfig(org?.id)
+        await sendEmail({ to: config.from, bcc: emails, subject, html, orgId: org?.id })
         notifiedCount = emails.length
       }
     } catch {

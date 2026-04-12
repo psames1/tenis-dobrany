@@ -21,6 +21,10 @@ const ADMIN_ONLY = [
   { href: '/admin/skupiny',   label: 'Skupiny',    icon: '🏷️' },
 ]
 
+const NASTAVENI_NAV = [
+  { href: '/admin/nastaveni/email', label: 'Email' },
+]
+
 type Props = {
   role: string
   name: string
@@ -122,6 +126,27 @@ export function AdminSidebar({ role, name, onClose }: Props) {
             ))}
           </div>
         )}
+
+        {/* Nastavení (admin + manager) */}
+        <div className="pt-3">
+          <div className="mb-1 flex items-center gap-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-green-500">
+            <span aria-hidden="true">⚙️</span>
+            Nastavení
+          </div>
+          {NASTAVENI_NAV.map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center rounded-lg py-2 pl-8 pr-3 text-sm font-medium transition-colors ${
+                isActive(item.href)
+                  ? 'bg-green-700 text-white'
+                  : 'text-green-300 hover:bg-green-800 hover:text-white'
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       </nav>
 
       {/* Zpět na web */}
