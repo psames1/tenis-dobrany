@@ -1,5 +1,6 @@
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export type OrgMode = 'app' | 'cms' | 'unknown'
 
@@ -31,11 +32,14 @@ export async function getOrgContext(): Promise<OrgContext> {
  */
 export async function getOrganization() {
   const ctx = await getOrgContext()
-  const supabase = await createClient()
+  // Use admin client for org lookup — bypasses RLS (org resolution is routing
+  // context, not sensitive data) and avoids issues with unauthenticated pages
+  // or cross-domain session cookies.
+  const admin = createAdminClient()
 
   if (ctx.slug) {
     // Lookup by slug (subdomain)
-    const { data } = await supabase
+    const { data } = await admin
       .from('app_organizations')
       .select('*')
       .eq('slug', ctx.slug)
@@ -45,22 +49,25 @@ export async function getOrganization() {
   }
 
   if (ctx.isCustomDomain) {
-    // Lookup by custom domain
-    const baseDomain = ctx.hostname.replace(/^app\./, '')
-    const { data } = await supabase
+    // Lookup by custom domain — strip leading app. or www.
+    const baseDomain = ctx.hostname
+      .replace(/^app\./, '')
+      .replace(/^www\./, '')
+    const { data } = await admin
       .from('app_organizations')
       .select('*')
       .eq('custom_domain', baseDomain)
       .eq('is_active', true)
       .single()
-    return data
+    if (data) return data
+    // Fallback: if custom domain not yet set in DB, try env slug
   }
 
   // Fallback pro localhost / dev prostředí:
   // 1. Pokud je v env nastavený NEXT_PUBLIC_ORG_SLUG, použij ho
   const envSlug = process.env.NEXT_PUBLIC_ORG_SLUG
   if (envSlug) {
-    const { data } = await supabase
+    const { data } = await admin
       .from('app_organizations')
       .select('*')
       .eq('slug', envSlug)
@@ -70,6 +77,7 @@ export async function getOrganization() {
   }
 
   // 2. Použij default_organization_id z profilu přihlášeného uživatele
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (user) {
     const { data: profile } = await supabase
@@ -79,7 +87,7 @@ export async function getOrganization() {
       .single()
 
     if (profile?.default_organization_id) {
-      const { data } = await supabase
+      const { data } = await admin
         .from('app_organizations')
         .select('*')
         .eq('id', profile.default_organization_id)
@@ -89,7 +97,7 @@ export async function getOrganization() {
     }
 
     // 3. Poslední záchrana — první aktivní organizace uživatele
-    const { data: membership } = await supabase
+    const { data: membership } = await admin
       .from('app_organization_members')
       .select('organization_id')
       .eq('user_id', user.id)
@@ -98,7 +106,7 @@ export async function getOrganization() {
       .single()
 
     if (membership?.organization_id) {
-      const { data } = await supabase
+      const { data } = await admin
         .from('app_organizations')
         .select('*')
         .eq('id', membership.organization_id)
